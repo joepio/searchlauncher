@@ -8,6 +8,7 @@ sealed class SearchResult {
         abstract val title: String
         abstract val subtitle: String?
         abstract val icon: Drawable?
+        abstract val rankingScore: Int
 
         data class App(
                 override val id: String,
@@ -15,6 +16,7 @@ sealed class SearchResult {
                 override val title: String,
                 override val subtitle: String?,
                 override val icon: Drawable?,
+                override val rankingScore: Int = 0,
                 val packageName: String
         ) : SearchResult()
 
@@ -24,6 +26,7 @@ sealed class SearchResult {
                 override val title: String,
                 override val subtitle: String?,
                 override val icon: Drawable?,
+                override val rankingScore: Int = 0,
                 val packageName: String,
                 val deepLink: String?
         ) : SearchResult()
@@ -34,6 +37,7 @@ sealed class SearchResult {
                 override val title: String,
                 override val subtitle: String?,
                 override val icon: Drawable?,
+                override val rankingScore: Int = 0,
                 val packageName: String,
                 val intentUri: String,
                 val appIcon: Drawable? = null
@@ -45,6 +49,7 @@ sealed class SearchResult {
                 override val title: String,
                 override val subtitle: String?,
                 override val icon: Drawable?,
+                override val rankingScore: Int = 0,
                 val trigger: String
         ) : SearchResult()
 }

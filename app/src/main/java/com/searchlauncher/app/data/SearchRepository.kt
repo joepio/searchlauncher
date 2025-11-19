@@ -443,6 +443,30 @@ class SearchRepository(private val context: Context) {
                                                 filterCustomShortcuts = true
                                                 val icon = getColoredSearchIcon(shortcut.color)
 
+                                                // Add literal search result first
+                                                val url =
+                                                        String.format(
+                                                                shortcut.urlTemplate,
+                                                                java.net.URLEncoder.encode(
+                                                                        searchTerm,
+                                                                        "UTF-8"
+                                                                )
+                                                        )
+                                                results.add(
+                                                        SearchResult.Content(
+                                                                id = "shortcut_${shortcut.trigger}",
+                                                                namespace = "custom_shortcuts",
+                                                                title =
+                                                                        "${shortcut.description}: $searchTerm",
+                                                                subtitle = "Custom Shortcut",
+                                                                icon = icon,
+                                                                packageName =
+                                                                        shortcut.packageName
+                                                                                ?: "android",
+                                                                deepLink = url
+                                                        )
+                                                )
+
                                                 // Fetch suggestions if available
                                                 val suggestionUrl = shortcut.suggestionUrl
                                                 if (suggestionUrl != null && searchTerm.isNotEmpty()
@@ -453,7 +477,7 @@ class SearchRepository(private val context: Context) {
                                                                         searchTerm
                                                                 )
                                                         suggestions.forEach { suggestion ->
-                                                                val url =
+                                                                val suggestionUrlFormatted =
                                                                         String.format(
                                                                                 shortcut.urlTemplate,
                                                                                 java.net.URLEncoder
@@ -475,33 +499,12 @@ class SearchRepository(private val context: Context) {
                                                                                 packageName =
                                                                                         shortcut.packageName
                                                                                                 ?: "android",
-                                                                                deepLink = url
+                                                                                deepLink =
+                                                                                        suggestionUrlFormatted
                                                                         )
                                                                 )
                                                         }
                                                 }
-
-                                                val url =
-                                                        String.format(
-                                                                shortcut.urlTemplate,
-                                                                java.net.URLEncoder.encode(
-                                                                        searchTerm,
-                                                                        "UTF-8"
-                                                                )
-                                                        )
-                                                results.add(
-                                                        SearchResult.Content(
-                                                                id = "shortcut_${shortcut.trigger}",
-                                                                namespace = "custom_shortcuts",
-                                                                title =
-                                                                        "${shortcut.description}: $searchTerm",
-                                                                subtitle = "Custom Shortcut",
-                                                                icon = icon,
-                                                                packageName = shortcut.packageName
-                                                                                ?: "android",
-                                                                deepLink = url
-                                                        )
-                                                )
                                         }
                                 }
                         }
@@ -525,15 +528,20 @@ class SearchRepository(private val context: Context) {
 
                                 val searchResults = session.search(query, searchSpec)
                                 var nextPage = searchResults.nextPageAsync.get()
+                                val appSearchResults = mutableListOf<SearchResult>()
 
                                 while (nextPage.isNotEmpty()) {
                                         for (result in nextPage) {
-                                                if (limit > 0 && results.size >= limit) break
+                                                if (limit > 0 &&
+                                                                appSearchResults.size >= limit * 2
+                                                )
+                                                        break
                                                 val doc =
                                                         result.genericDocument.toDocumentClass(
                                                                 AppSearchDocument::class.java
                                                         )
                                                 val packageName = doc.id
+                                                val baseScore = result.rankingSignal.toInt()
 
                                                 // Check namespace to distinguish between apps and
                                                 // shortcuts
@@ -611,18 +619,20 @@ class SearchRepository(private val context: Context) {
                                                                         null
                                                                 }
 
-                                                        results.add(
+                                                        appSearchResults.add(
                                                                 SearchResult.Shortcut(
                                                                         id = doc.id,
                                                                         namespace = "shortcuts",
                                                                         title = doc.name,
-                                                                        subtitle = doc.description
+                                                                        subtitle =
+                                                                                doc.description
                                                                                         ?: "Shortcut",
                                                                         icon = icon,
                                                                         packageName = pkg,
                                                                         intentUri = doc.intentUri
                                                                                         ?: "",
-                                                                        appIcon = appIcon
+                                                                        appIcon = appIcon,
+                                                                        rankingScore = baseScore
                                                                 )
                                                         )
                                                 } else if (result.genericDocument.namespace ==
@@ -630,7 +640,7 @@ class SearchRepository(private val context: Context) {
                                                 ) {
                                                         if (doc.isAction) {
                                                                 // Direct action (e.g. ADB Wireless)
-                                                                results.add(
+                                                                appSearchResults.add(
                                                                         SearchResult.Content(
                                                                                 id = doc.id,
                                                                                 namespace =
@@ -641,7 +651,9 @@ class SearchRepository(private val context: Context) {
                                                                                 packageName =
                                                                                         "android",
                                                                                 deepLink =
-                                                                                        doc.intentUri
+                                                                                        doc.intentUri,
+                                                                                rankingScore =
+                                                                                        baseScore
                                                                         )
                                                                 )
                                                         } else {
@@ -662,7 +674,7 @@ class SearchRepository(private val context: Context) {
                                                                                 shortcutDef?.color
                                                                         )
 
-                                                                results.add(
+                                                                appSearchResults.add(
                                                                         SearchResult.SearchIntent(
                                                                                 id = doc.id,
                                                                                 namespace =
@@ -673,7 +685,9 @@ class SearchRepository(private val context: Context) {
                                                                                 icon = icon,
                                                                                 trigger =
                                                                                         doc.description
-                                                                                                ?: ""
+                                                                                                ?: "",
+                                                                                rankingScore =
+                                                                                        baseScore
                                                                         )
                                                                 )
                                                         }
@@ -714,19 +728,21 @@ class SearchRepository(private val context: Context) {
                                                                         null
                                                                 }
 
-                                                        results.add(
+                                                        appSearchResults.add(
                                                                 SearchResult.Shortcut(
                                                                         id = doc.id,
                                                                         namespace =
                                                                                 "static_shortcuts",
                                                                         title = doc.name,
-                                                                        subtitle = doc.description
+                                                                        subtitle =
+                                                                                doc.description
                                                                                         ?: "Shortcut",
                                                                         icon = icon,
                                                                         packageName = pkg,
                                                                         intentUri = doc.intentUri
                                                                                         ?: "",
-                                                                        appIcon = appIcon
+                                                                        appIcon = appIcon,
+                                                                        rankingScore = baseScore
                                                                 )
                                                         )
                                                 } else {
@@ -741,7 +757,7 @@ class SearchRepository(private val context: Context) {
                                                                         null
                                                                 }
 
-                                                        results.add(
+                                                        appSearchResults.add(
                                                                 SearchResult.App(
                                                                         id = doc.id,
                                                                         namespace = "apps",
@@ -749,13 +765,22 @@ class SearchRepository(private val context: Context) {
                                                                         subtitle = doc.description
                                                                                         ?: doc.id,
                                                                         icon = icon,
-                                                                        packageName = doc.id
+                                                                        packageName = doc.id,
+                                                                        rankingScore = baseScore + 5
                                                                 )
                                                         )
                                                 }
                                         }
-                                        if (limit > 0 && results.size >= limit) break
+                                        if (limit > 0 && appSearchResults.size >= limit * 2) break
                                         nextPage = searchResults.nextPageAsync.get()
+                                }
+
+                                // Sort and limit
+                                appSearchResults.sortByDescending { it.rankingScore }
+                                if (limit > 0) {
+                                    results.addAll(appSearchResults.take(limit))
+                                } else {
+                                    results.addAll(appSearchResults)
                                 }
 
                                 // Web search fallback
