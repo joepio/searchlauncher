@@ -592,9 +592,15 @@ class SearchWindowManager(private val context: Context, private val windowManage
                                     android.os.Process.myUserHandle()
                             )
                         }
+                    } else {
+                        // Static shortcut (standard intent)
+                        val intent = Intent.parseUri(uri, 0)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    Toast.makeText(context, "Error launching shortcut", Toast.LENGTH_SHORT).show()
                 }
             }
             is SearchResult.SearchIntent -> {

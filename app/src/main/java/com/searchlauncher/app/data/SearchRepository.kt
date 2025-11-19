@@ -9,6 +9,10 @@ import androidx.appsearch.app.SearchSpec
 import androidx.appsearch.app.SetSchemaRequest
 import androidx.appsearch.localstorage.LocalStorage
 import com.searchlauncher.app.util.StaticShortcutScanner
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
+import android.graphics.Color
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
@@ -136,10 +140,25 @@ class SearchRepository(private val context: Context) {
                         val shortcuts = StaticShortcutScanner.scan(context)
                         val docs =
                                 shortcuts.map { s ->
+                                        val appName =
+                                                try {
+                                                        val appInfo =
+                                                                context.packageManager
+                                                                        .getApplicationInfo(
+                                                                                s.packageName,
+                                                                                0
+                                                                        )
+                                                        context.packageManager
+                                                                .getApplicationLabel(appInfo)
+                                                                .toString()
+                                                } catch (e: Exception) {
+                                                        s.packageName
+                                                }
+
                                         AppSearchDocument(
                                                 namespace = "static_shortcuts",
                                                 id = "${s.packageName}/${s.id}",
-                                                name = s.shortLabel,
+                                                name = "$appName: ${s.shortLabel}",
                                                 description = s.longLabel ?: "Shortcut",
                                                 score = 1,
                                                 intentUri = s.intent.toUri(0),
@@ -422,6 +441,7 @@ class SearchRepository(private val context: Context) {
 
                                         if (shortcut != null) {
                                                 filterCustomShortcuts = true
+                                                val icon = getColoredSearchIcon(shortcut.color)
 
                                                 // Fetch suggestions if available
                                                 val suggestionUrl = shortcut.suggestionUrl
@@ -451,7 +471,7 @@ class SearchRepository(private val context: Context) {
                                                                                 title = suggestion,
                                                                                 subtitle =
                                                                                         "${shortcut.description} Suggestion",
-                                                                                icon = null,
+                                                                                icon = icon,
                                                                                 packageName =
                                                                                         shortcut.packageName
                                                                                                 ?: "android",
@@ -476,8 +496,7 @@ class SearchRepository(private val context: Context) {
                                                                 title =
                                                                         "${shortcut.description}: $searchTerm",
                                                                 subtitle = "Custom Shortcut",
-                                                                icon = null, // TODO: Add
-                                                                // icon
+                                                                icon = icon,
                                                                 packageName = shortcut.packageName
                                                                                 ?: "android",
                                                                 deepLink = url
@@ -628,6 +647,21 @@ class SearchRepository(private val context: Context) {
                                                         } else {
                                                                 // Search template (e.g. YouTube
                                                                 // Search)
+                                                                val trigger = doc.description ?: ""
+                                                                val shortcutDef =
+                                                                        CustomShortcuts.shortcuts
+                                                                                .filterIsInstance<
+                                                                                        CustomShortcut
+                                                                                                .Search>()
+                                                                                .find {
+                                                                                        it.trigger ==
+                                                                                                trigger
+                                                                                }
+                                                                val icon =
+                                                                        getColoredSearchIcon(
+                                                                                shortcutDef?.color
+                                                                        )
+
                                                                 results.add(
                                                                         SearchResult.SearchIntent(
                                                                                 id = doc.id,
@@ -636,7 +670,7 @@ class SearchRepository(private val context: Context) {
                                                                                 title = doc.name,
                                                                                 subtitle =
                                                                                         "Type '${doc.description} ' to search",
-                                                                                icon = null,
+                                                                                icon = icon,
                                                                                 trigger =
                                                                                         doc.description
                                                                                                 ?: ""
@@ -811,5 +845,27 @@ class SearchRepository(private val context: Context) {
         fun close() {
                 appSearchSession?.close()
                 executor.shutdown()
+        }
+
+        private fun getColoredSearchIcon(color: Long?): Drawable? {
+                if (color == null) return null
+
+                val background = GradientDrawable()
+                background.shape = GradientDrawable.OVAL
+                background.setColor(color.toInt())
+
+                val icon =
+                        context.getDrawable(com.searchlauncher.app.R.drawable.ic_search)?.mutate()
+                icon?.setTint(Color.WHITE)
+
+                if (icon == null) return background
+
+                val layers = arrayOf(background, icon)
+                val layerDrawable = LayerDrawable(layers)
+
+                val inset = (6 * context.resources.displayMetrics.density).toInt()
+                layerDrawable.setLayerInset(1, inset, inset, inset, inset)
+
+                return layerDrawable
         }
 }
