@@ -35,7 +35,8 @@ sealed class SearchResult {
                 override val subtitle: String?,
                 override val icon: Drawable?,
                 val packageName: String,
-                val intentUri: String
+                val intentUri: String,
+                val appIcon: Drawable? = null
         ) : SearchResult()
 
         data class SearchIntent(

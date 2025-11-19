@@ -21,5 +21,7 @@ data class AppSearchDocument(
         )
         val description: String? = null, // App Category or Description
         @Document.BooleanProperty
-        val isAction: Boolean = false // True if this is a direct action (not a search template)
+        val isAction: Boolean = false, // True if this is a direct action (not a search template)
+        @Document.LongProperty
+        val iconResId: Long = 0
 )

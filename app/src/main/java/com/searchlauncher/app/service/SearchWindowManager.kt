@@ -4,7 +4,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.PixelFormat
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.text.Editable
 import android.text.TextWatcher
@@ -16,6 +20,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -31,6 +36,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -484,8 +491,23 @@ class SearchWindowManager(private val context: Context, private val windowManage
                 modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon would be shown here if we had a way to render Drawable in Compose
-            // For now, we'll use a placeholder
+            Box(modifier = Modifier.size(40.dp)) {
+                if (result.icon != null) {
+                    Image(
+                            bitmap = result.icon!!.toImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp)
+                    )
+                }
+
+                if (result is SearchResult.Shortcut && result.appIcon != null) {
+                    Image(
+                            bitmap = result.appIcon!!.toImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp).align(Alignment.TopStart)
+                    )
+                }
+            }
 
             Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
                 Text(
@@ -539,9 +561,7 @@ class SearchWindowManager(private val context: Context, private val windowManage
                                             .show()
                                 }
                             }
-                        } else if (intent.action ==
-                                        "com.searchlauncher.action.TOGGLE_FLASHLIGHT"
-                        ) {
+                        } else if (intent.action == "com.searchlauncher.action.TOGGLE_FLASHLIGHT") {
                             toggleFlashlight(context)
                         } else {
                             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -605,7 +625,10 @@ class SearchWindowManager(private val context: Context, private val windowManage
                 if (cameraId != null) {
                     cameraManager.registerTorchCallback(
                             object : android.hardware.camera2.CameraManager.TorchCallback() {
-                                override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
+                                override fun onTorchModeChanged(
+                                        cameraId: String,
+                                        enabled: Boolean
+                                ) {
                                     super.onTorchModeChanged(cameraId, enabled)
                                     cameraManager.unregisterTorchCallback(this)
                                     try {
@@ -631,12 +654,27 @@ class SearchWindowManager(private val context: Context, private val windowManage
                 Toast.makeText(context, "Error accessing camera", Toast.LENGTH_SHORT).show()
             }
         } else {
-            Toast.makeText(
-                            context,
-                            "Flashlight not supported on this device",
-                            Toast.LENGTH_SHORT
-                    )
+            Toast.makeText(context, "Flashlight not supported on this device", Toast.LENGTH_SHORT)
                     .show()
         }
     }
+}
+
+private fun Drawable.toImageBitmap(): ImageBitmap {
+    val bitmap =
+            if (this is BitmapDrawable) {
+                this.bitmap
+            } else {
+                val bitmap =
+                        Bitmap.createBitmap(
+                                intrinsicWidth.takeIf { it > 0 } ?: 1,
+                                intrinsicHeight.takeIf { it > 0 } ?: 1,
+                                Bitmap.Config.ARGB_8888
+                        )
+                val canvas = Canvas(bitmap)
+                setBounds(0, 0, canvas.width, canvas.height)
+                draw(canvas)
+                bitmap
+            }
+    return bitmap.asImageBitmap()
 }

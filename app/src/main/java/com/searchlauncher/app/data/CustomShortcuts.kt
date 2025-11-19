@@ -213,6 +213,11 @@ object CustomShortcuts {
                                 intentUri =
                                         "intent:#Intent;action=com.searchlauncher.action.TOGGLE_FLASHLIGHT;end",
                                 description = "Toggle Flashlight"
+                        ),
+                        CustomShortcut.Action(
+                                intentUri =
+                                        "intent:#Intent;action=android.media.action.STILL_IMAGE_CAMERA;i.android.intent.extras.CAMERA_FACING=1;end",
+                                description = "Selfie Camera"
                         )
                 ) + generateSettingsShortcuts()
 }
