@@ -545,7 +545,9 @@ private fun launchResult(
             }
         }
         is SearchResult.QuickCopy -> {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clipboard =
+                    context.getSystemService(Context.CLIPBOARD_SERVICE) as
+                            android.content.ClipboardManager
             val clip = android.content.ClipData.newPlainText(result.alias, result.content)
             clipboard.setPrimaryClip(clip)
             Toast.makeText(context, "Copied ${result.alias}", Toast.LENGTH_SHORT).show()

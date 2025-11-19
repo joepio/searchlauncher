@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
@@ -446,20 +447,26 @@ fun HomeScreen(
 
 @Composable
 fun PermissionStatus(title: String, granted: Boolean, onGrant: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                    text = if (granted) "Granted" else "Not granted",
-                    style = MaterialTheme.typography.bodySmall,
-                    color =
-                            if (granted) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.error
-            )
-        }
+    Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f)
+        )
 
-        if (!granted) {
-            TextButton(onClick = onGrant) { Text("Grant") }
+        if (granted) {
+            Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.Check,
+                    contentDescription = "Granted",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+            )
+        } else {
+            Button(onClick = onGrant) { Text("Grant") }
         }
     }
 }
