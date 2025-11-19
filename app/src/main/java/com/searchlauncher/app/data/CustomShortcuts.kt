@@ -211,6 +211,11 @@ object CustomShortcuts {
                         ),
                         CustomShortcut.Action(
                                 intentUri =
+                                        "intent:#Intent;action=com.searchlauncher.RESET_APP_DATA;end",
+                                description = "Reset App Data"
+                        ),
+                        CustomShortcut.Action(
+                                intentUri =
                                         "intent:#Intent;action=com.searchlauncher.action.TOGGLE_FLASHLIGHT;end",
                                 description = "Toggle Flashlight"
                         ),
