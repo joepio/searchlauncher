@@ -49,6 +49,7 @@ class SearchRepository(private val context: Context) {
 
                                 // Index apps
                                 indexApps()
+                                indexCustomShortcuts()
                         } catch (e: Exception) {
                                 e.printStackTrace()
                                 android.util.Log.e("SearchRepository", "initialize: Error", e)
@@ -357,7 +358,7 @@ class SearchRepository(private val context: Context) {
                         }
                 }
 
-        suspend fun searchApps(query: String): List<SearchResult> =
+        suspend fun searchApps(query: String, limit: Int = -1): List<SearchResult> =
                 withContext(Dispatchers.IO) {
                         val startTime = System.currentTimeMillis()
                         val session = appSearchSession
@@ -382,6 +383,7 @@ class SearchRepository(private val context: Context) {
 
                                 while (nextPage.isNotEmpty()) {
                                         for (result in nextPage) {
+                                                if (limit > 0 && results.size >= limit) break
                                                 val doc =
                                                         result.genericDocument.toDocumentClass(
                                                                 AppSearchDocument::class.java
@@ -474,6 +476,7 @@ class SearchRepository(private val context: Context) {
                                                         )
                                                 }
                                         }
+                                        if (limit > 0 && results.size >= limit) break
                                         nextPage = searchResults.nextPageAsync.get()
                                 }
 

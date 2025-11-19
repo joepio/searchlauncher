@@ -66,11 +66,11 @@ class SearchWindowManager(private val context: Context, private val windowManage
     fun show() {
         if (searchView != null) return
 
-        // Refresh shortcuts when showing
-        scope.launch {
-            searchRepository.indexShortcuts()
-            searchRepository.indexCustomShortcuts()
-        }
+        // Removed re-indexing on show for performance
+        // scope.launch {
+        //    searchRepository.indexShortcuts()
+        //    searchRepository.indexCustomShortcuts()
+        // }
 
         lifecycleOwner = MyLifecycleOwner()
         lifecycleOwner?.onCreate()
@@ -281,7 +281,7 @@ class SearchWindowManager(private val context: Context, private val windowManage
 
         LaunchedEffect(query) {
             if (query.isEmpty()) {
-                searchResults = searchRepository.searchApps("")
+                searchResults = searchRepository.searchApps("", limit = 50)
             } else {
                 delay(50) // Debounce
                 searchResults = searchRepository.searchApps(query)
@@ -335,7 +335,10 @@ class SearchWindowManager(private val context: Context, private val windowManage
 
                                                     // Report usage for ranking
                                                     scope.launch {
-                                                        searchRepository.reportUsage(result.namespace, result.id)
+                                                        searchRepository.reportUsage(
+                                                                result.namespace,
+                                                                result.id
+                                                        )
                                                     }
                                                 }
                                             }
