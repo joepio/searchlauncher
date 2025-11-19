@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
 
     private var queryState by mutableStateOf("")
     private var currentScreenState by mutableStateOf(Screen.Search)
+    private var focusTrigger by mutableStateOf(0L)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -43,6 +44,7 @@ class MainActivity : ComponentActivity() {
         if (intent.hasCategory(Intent.CATEGORY_HOME) && intent.action == Intent.ACTION_MAIN) {
             queryState = ""
             currentScreenState = Screen.Search
+            focusTrigger = System.currentTimeMillis()
         }
     }
 
@@ -120,7 +122,8 @@ class MainActivity : ComponentActivity() {
                             onQueryChange = { queryState = it },
                             onDismiss = { /* No-op for home screen */},
                             onOpenSettings = { currentScreenState = Screen.Settings },
-                            searchRepository = app.searchRepository
+                            searchRepository = app.searchRepository,
+                            focusTrigger = focusTrigger
                     )
                 }
                 Screen.Settings -> {
@@ -166,7 +169,17 @@ fun HomeScreen(
         onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    var isServiceRunning by remember { mutableStateOf(false) }
+    var isServiceRunning by remember { mutableStateOf(OverlayService.isRunning) }
+
+    // Keep UI in sync if service state changes externally (optional but good practice)
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (isServiceRunning != OverlayService.isRunning) {
+                isServiceRunning = OverlayService.isRunning
+            }
+            kotlinx.coroutines.delay(1000)
+        }
+    }
 
     Column(
             modifier = Modifier.fillMaxSize().padding(PaddingValues(16.dp)),

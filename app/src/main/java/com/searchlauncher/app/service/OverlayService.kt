@@ -27,11 +27,6 @@ class OverlayService : Service() {
     private var initialY = 0f
     private var hasMovedBack = false
 
-    override fun onCreate() {
-        super.onCreate()
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(SearchLauncherApp.NOTIFICATION_ID, createNotification())
 
@@ -142,15 +137,23 @@ class OverlayService : Service() {
         }
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        isRunning = true
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         leftEdgeView?.let { windowManager.removeView(it) }
         rightEdgeView?.let { windowManager.removeView(it) }
+        isRunning = false
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
+        var isRunning = false
         const val ACTION_SHOW_SEARCH = "com.searchlauncher.SHOW_SEARCH"
         const val ACTION_HIDE_SEARCH = "com.searchlauncher.HIDE_SEARCH"
         private const val SWIPE_THRESHOLD = 100f

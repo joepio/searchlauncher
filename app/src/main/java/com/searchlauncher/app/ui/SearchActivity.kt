@@ -1,5 +1,6 @@
 package com.searchlauncher.app.ui
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,12 +29,12 @@ class SearchActivity : ComponentActivity() {
                     onQueryChange = { query = it },
                     onDismiss = { finish() },
                     onOpenSettings = {
-                        val intent = android.content.Intent(this, MainActivity::class.java)
-                        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        val intent = Intent(this, MainActivity::class.java)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
-                        finish()
                     },
-                    searchRepository = app.searchRepository
+                    searchRepository = app.searchRepository,
+                    focusTrigger = 0L
             )
         }
     }

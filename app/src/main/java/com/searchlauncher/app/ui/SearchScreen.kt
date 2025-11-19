@@ -52,7 +52,8 @@ fun SearchScreen(
         onQueryChange: (String) -> Unit,
         onDismiss: () -> Unit,
         onOpenSettings: () -> Unit,
-        searchRepository: SearchRepository
+        searchRepository: SearchRepository,
+        focusTrigger: Long = 0L
 ) {
     var searchResults by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
@@ -60,7 +61,7 @@ fun SearchScreen(
     val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(focusTrigger) { focusRequester.requestFocus() }
 
     LaunchedEffect(query) {
         if (query.isEmpty()) {
