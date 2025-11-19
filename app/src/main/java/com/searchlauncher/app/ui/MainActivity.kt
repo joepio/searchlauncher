@@ -186,6 +186,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     var isServiceRunning by remember { mutableStateOf(OverlayService.isRunning) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
 
     // Keep UI in sync if service state changes externally (optional but good practice)
     LaunchedEffect(Unit) {
@@ -195,6 +196,22 @@ fun HomeScreen(
             }
             kotlinx.coroutines.delay(1000)
         }
+    }
+
+    // Check if required permissions are granted
+    val hasOverlayPermission = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(context)
+        } else true
+    }
+    val hasAccessibilityPermission = remember { isAccessibilityServiceEnabled(context) }
+
+    // Check if this app is the default launcher
+    val isDefaultLauncher = remember {
+        val intent = Intent(Intent.ACTION_MAIN)
+        intent.addCategory(Intent.CATEGORY_HOME)
+        val resolveInfo = context.packageManager.resolveActivity(intent, 0)
+        resolveInfo?.activityInfo?.packageName == context.packageName
     }
 
     Column(
@@ -223,47 +240,69 @@ fun HomeScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(text = "Service Status", style = MaterialTheme.typography.titleMedium)
+                Text(text = "Side swipe gesture", style = MaterialTheme.typography.titleMedium)
                 Text(
-                        text = if (isServiceRunning) "Active" else "Inactive",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color =
-                                if (isServiceRunning) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                        text =
+                                "Swipe from the edge of the screen and back to open search",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Button(
-                        onClick = {
-                            if (isServiceRunning) {
-                                onStopService()
-                                isServiceRunning = false
-                            } else {
-                                onStartService()
-                                isServiceRunning = true
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                ) { Text(if (isServiceRunning) "Stop Service" else "Start Service") }
+                Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                            onClick = {
+                                if (isServiceRunning) {
+                                    onStopService()
+                                    isServiceRunning = false
+                                } else {
+                                    // Check permissions before starting
+                                    if (hasOverlayPermission && hasAccessibilityPermission) {
+                                        onStartService()
+                                        isServiceRunning = true
+                                    } else {
+                                        showPermissionDialog = true
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                    ) { Text(if (isServiceRunning) "Stop" else "Start") }
+
+                    OutlinedButton(
+                            onClick = onOpenPractice,
+                            modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Practice")
+                    }
+                }
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(text = "How to Use", style = MaterialTheme.typography.titleMedium)
-                Text(
-                        text =
-                                "1. Swipe from the edge of the screen\n" +
-                                        "2. Swipe back to the edge\n" +
-                                        "3. The search bar will appear\n" +
-                                        "4. Start typing to search apps and content",
-                        style = MaterialTheme.typography.bodyMedium
-                )
+        // Show launcher settings if not default launcher
+        if (!isDefaultLauncher) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(text = "Launcher", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                            text = "Set SearchLauncher as your default home screen",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
-                Button(onClick = onOpenPractice, modifier = Modifier.fillMaxWidth()) {
-                    Text("Practice Gesture")
+                    Button(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_HOME_SETTINGS)
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Set as Default Launcher")
+                    }
                 }
             }
         }
@@ -308,8 +347,6 @@ fun HomeScreen(
                 }
             }
         }
-
-        QuickCopyCard()
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(
@@ -398,6 +435,8 @@ fun HomeScreen(
             }
         }
 
+        QuickCopyCard()
+
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(
                     modifier = Modifier.padding(16.dp),
@@ -442,6 +481,63 @@ fun HomeScreen(
                 ) { Text("Reset App Data") }
             }
         }
+    }
+
+    // Show permission guide dialog
+    if (showPermissionDialog) {
+        AlertDialog(
+                onDismissRequest = { showPermissionDialog = false },
+                title = { Text("Required Permissions") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text(
+                                "To use the side swipe gesture, SearchLauncher needs the following permissions:",
+                                style = MaterialTheme.typography.bodyMedium
+                        )
+
+                        if (!hasOverlayPermission) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                        "• Display Over Other Apps",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                )
+                                Text(
+                                        "Allows SearchLauncher to show the search interface on top of other apps",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        if (!hasAccessibilityPermission) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                        "• Accessibility Service",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                )
+                                Text(
+                                        "Detects swipe gestures from the edge of your screen",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Text(
+                                "You can grant these permissions in the Permissions section below.",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { showPermissionDialog = false }) {
+                        Text("Got it")
+                    }
+                }
+        )
     }
 }
 
