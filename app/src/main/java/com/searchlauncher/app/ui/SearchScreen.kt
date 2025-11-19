@@ -12,7 +12,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.data.SearchResult
+import com.searchlauncher.app.ui.theme.SearchLauncherTheme
 import com.searchlauncher.app.util.CustomActionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -90,25 +90,7 @@ fun SearchScreen(
         }
     }
 
-    val darkTheme = isSystemInDarkTheme()
-    val colorScheme =
-            if (darkTheme) {
-                darkColorScheme(
-                        surface = Color(0xFF1E1E1E),
-                        onSurface = Color.White,
-                        surfaceVariant = Color(0xFF2C2C2C),
-                        onSurfaceVariant = Color(0xFFCCCCCC)
-                )
-            } else {
-                lightColorScheme(
-                        surface = Color.White,
-                        onSurface = Color.Black,
-                        surfaceVariant = Color(0xFFF0F0F0),
-                        onSurfaceVariant = Color(0xFF444444)
-                )
-            }
-
-    MaterialTheme(colorScheme = colorScheme) {
+    SearchLauncherTheme {
         Box(
                 modifier =
                         Modifier.fillMaxSize()
