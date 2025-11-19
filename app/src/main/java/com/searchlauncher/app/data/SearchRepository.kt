@@ -12,7 +12,12 @@ import java.util.concurrent.Executors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import org.json.JSONArray
+import java.net.HttpURLConnection
+import java.net.URL
+
 class SearchRepository(private val context: Context) {
+// ...
 
         private var appSearchSession: AppSearchSession? = null
         private val executor = Executors.newSingleThreadExecutor()
@@ -122,6 +127,35 @@ class SearchRepository(private val context: Context) {
                                 )
                         }
                 }
+
+        suspend fun resetIndex() =
+                withContext(Dispatchers.IO) {
+                        val session = appSearchSession ?: return@withContext
+                        android.util.Log.d("SearchRepository", "resetIndex: Clearing all documents")
+                        try {
+                                // Force clear EVERYTHING including schema
+                                val setSchemaRequest =
+                                        SetSchemaRequest.Builder()
+                                                .setForceOverride(true)
+                                                .build() // Empty schema clears everything
+                                session.setSchemaAsync(setSchemaRequest).get()
+
+                                // Re-initialize schema
+                                val initSchemaRequest =
+                                        SetSchemaRequest.Builder()
+                                                .addDocumentClasses(AppSearchDocument::class.java)
+                                                .build()
+                                session.setSchemaAsync(initSchemaRequest).get()
+
+                                // Re-index
+                                indexApps()
+                                indexCustomShortcuts()
+                                android.util.Log.d("SearchRepository", "resetIndex: Complete")
+                        } catch (e: Exception) {
+                                e.printStackTrace()
+                        }
+                }
+
         private suspend fun indexApps() =
                 withContext(Dispatchers.IO) {
                         val session = appSearchSession ?: return@withContext
@@ -438,6 +472,32 @@ class SearchRepository(private val context: Context) {
                                                                 }
 
                                                 if (shortcut != null) {
+                                                        // Fetch suggestions if available
+                                                        if (shortcut.suggestionUrl != null && searchTerm.isNotEmpty()) {
+                                                                val suggestions = fetchSuggestions(shortcut.suggestionUrl, searchTerm)
+                                                                suggestions.forEach { suggestion ->
+                                                                        val url =
+                                                                                String.format(
+                                                                                        shortcut.urlTemplate,
+                                                                                        java.net.URLEncoder.encode(
+                                                                                                suggestion,
+                                                                                                "UTF-8"
+                                                                                        )
+                                                                                )
+                                                                        results.add(
+                                                                                0,
+                                                                                SearchResult.Content(
+                                                                                        id = "suggestion_${shortcut.trigger}_$suggestion",
+                                                                                        title = suggestion,
+                                                                                        subtitle = "${shortcut.description} Suggestion",
+                                                                                        icon = null,
+                                                                                        packageName = shortcut.packageName ?: "android",
+                                                                                        deepLink = url
+                                                                                )
+                                                                        )
+                                                                }
+                                                        }
+
                                                         val url =
                                                                 String.format(
                                                                         shortcut.urlTemplate,
@@ -509,6 +569,35 @@ class SearchRepository(private val context: Context) {
                         // empty/dummy
                         apps
                 }
+
+        private fun fetchSuggestions(urlTemplate: String, query: String): List<String> {
+                val suggestions = mutableListOf<String>()
+                try {
+                        val urlString = String.format(urlTemplate, java.net.URLEncoder.encode(query, "UTF-8"))
+                        val url = URL(urlString)
+                        val connection = url.openConnection() as HttpURLConnection
+                        connection.requestMethod = "GET"
+                        connection.connectTimeout = 2000 // 2 seconds timeout
+                        connection.readTimeout = 2000
+
+                        if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                                val response = connection.inputStream.bufferedReader().use { it.readText() }
+                                // YouTube API returns JSON like: ["query", ["suggestion1", "suggestion2", ...], ...]
+                                val jsonArray = JSONArray(response)
+                                if (jsonArray.length() > 1) {
+                                        val suggestionsArray = jsonArray.getJSONArray(1)
+                                        for (i in 0 until suggestionsArray.length()) {
+                                                suggestions.add(suggestionsArray.getString(i))
+                                                if (suggestions.size >= 5) break // Limit to 5 suggestions
+                                        }
+                                }
+                        }
+                } catch (e: Exception) {
+                        // Log error but don't crash search
+                        android.util.Log.w("SearchRepository", "Error fetching suggestions: ${e.message}")
+                }
+                return suggestions
+        }
 
         fun close() {
                 appSearchSession?.close()

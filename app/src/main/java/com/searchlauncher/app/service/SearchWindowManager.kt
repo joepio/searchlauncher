@@ -15,8 +15,10 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,6 +45,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SearchWindowManager(private val context: Context, private val windowManager: WindowManager) {
     private var searchView: View? = null
@@ -191,7 +194,7 @@ class SearchWindowManager(private val context: Context, private val windowManage
                                 PixelFormat.TRANSLUCENT
                         )
                         .apply {
-                            gravity = Gravity.TOP
+                            gravity = Gravity.BOTTOM
                             dimAmount = 0.5f
                             softInputMode =
                                     WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
@@ -290,11 +293,72 @@ class SearchWindowManager(private val context: Context, private val windowManage
                                 .clickable { onDismiss() }
         ) {
             Column(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp).clickable(enabled = false) {}
+                    modifier =
+                            Modifier.fillMaxSize()
+                                    .padding(16.dp)
+                                    .navigationBarsPadding()
+                                    .imePadding(),
+                    verticalArrangement = Arrangement.Bottom
             ) {
-                // Search bar
+                // Results (displayed above search bar)
+                if (searchResults.isNotEmpty() || (query.isNotEmpty() && !isLoading)) {
+                    Surface(
+                            modifier =
+                                    Modifier.fillMaxWidth().weight(1f, fill = false).clickable(
+                                                    indication = null,
+                                                    interactionSource =
+                                                            remember { MutableInteractionSource() }
+                                            ) {},
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 2.dp
+                    ) {
+                        if (isLoading) {
+                            Box(
+                                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                            ) { CircularProgressIndicator() }
+                        } else {
+                            LazyColumn(reverseLayout = true) {
+                                items(searchResults) { result ->
+                                    SearchResultItem(
+                                            result = result,
+                                            onClick = {
+                                                if (result is SearchResult.SearchIntent) {
+                                                    onQueryChange(result.trigger + " ")
+                                                } else {
+                                                    launchResult(context, result)
+                                                    onDismiss()
+                                                }
+                                            }
+                                    )
+                                }
+
+                                if (searchResults.isEmpty() && query.isNotEmpty()) {
+                                    item {
+                                        Text(
+                                                text = "No results found",
+                                                modifier = Modifier.padding(32.dp),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // Search bar (at bottom)
                 Surface(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier =
+                                Modifier.fillMaxWidth().clickable(
+                                                indication = null,
+                                                interactionSource =
+                                                        remember { MutableInteractionSource() }
+                                        ) {},
                         shape = RoundedCornerShape(28.dp),
                         color = MaterialTheme.colorScheme.surface,
                         tonalElevation = 3.dp
@@ -337,55 +401,15 @@ class SearchWindowManager(private val context: Context, private val windowManage
                         }
 
                         if (query.isNotEmpty()) {
-                            IconButton(onClick = { onQueryChange("") }) {
+                            IconButton(
+                                    onClick = { onQueryChange("") },
+                                    modifier = Modifier.size(32.dp).padding(4.dp)
+                            ) {
                                 Icon(
                                         imageVector = Icons.Default.Close,
-                                        contentDescription = "Clear"
+                                        contentDescription = "Clear",
+                                        modifier = Modifier.size(16.dp)
                                 )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Results
-                Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 2.dp
-                ) {
-                    if (isLoading) {
-                        Box(
-                                modifier = Modifier.fillMaxWidth().padding(32.dp),
-                                contentAlignment = Alignment.Center
-                        ) { CircularProgressIndicator() }
-                    } else {
-                        LazyColumn(modifier = Modifier.heightIn(max = 500.dp)) {
-                            items(searchResults) { result ->
-                                SearchResultItem(
-                                        result = result,
-                                        onClick = {
-                                            if (result is SearchResult.SearchIntent) {
-                                                onQueryChange(result.trigger + " ")
-                                            } else {
-                                                launchResult(context, result)
-                                                onDismiss()
-                                            }
-                                        }
-                                )
-                            }
-
-                            if (searchResults.isEmpty() && query.isNotEmpty()) {
-                                item {
-                                    Text(
-                                            text = "No results found",
-                                            modifier = Modifier.padding(32.dp),
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
                             }
                         }
                     }
@@ -442,10 +466,26 @@ class SearchWindowManager(private val context: Context, private val windowManage
                                 } else {
                                     Intent(Intent.ACTION_VIEW, android.net.Uri.parse(deepLink))
                                 }
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
+
+                        if (intent.action == "com.searchlauncher.RESET_INDEX") {
+                            scope.launch {
+                                searchRepository.resetIndex()
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(
+                                                    context,
+                                                    "Search Index Reset",
+                                                    Toast.LENGTH_SHORT
+                                            )
+                                            .show()
+                                }
+                            }
+                        } else {
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(intent)
+                        }
                     } catch (e: Exception) {
                         e.printStackTrace()
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
             }

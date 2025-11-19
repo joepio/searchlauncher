@@ -1,5 +1,6 @@
 package com.searchlauncher.app.data
 
+// Reformatted to 4 spaces
 sealed class CustomShortcut {
         abstract val description: String
         abstract val packageName: String?
@@ -8,7 +9,8 @@ sealed class CustomShortcut {
                 val trigger: String,
                 val urlTemplate: String,
                 override val description: String,
-                override val packageName: String? = null
+                override val packageName: String? = null,
+                val suggestionUrl: String? = null
         ) : CustomShortcut()
 
         data class Action(
@@ -78,6 +80,7 @@ object CustomShortcuts {
                         "android.settings.WEBVIEW_SETTINGS",
                         "android.settings.WIFI_SETTINGS",
                         "android.settings.WIRELESS_SETTINGS",
+                        "android.settings.WIRELESS_DEBUGGING_SETTINGS",
                         "android.settings.ZEN_MODE_PRIORITY_SETTINGS",
                         "android.settings.action.MANAGE_OVERLAY_PERMISSION",
                         "android.settings.action.MANAGE_WRITE_SETTINGS"
@@ -106,52 +109,92 @@ object CustomShortcuts {
         val shortcuts =
                 listOf(
                         CustomShortcut.Search(
-                                "g",
-                                "https://www.google.com/search?q=%s",
-                                "Google Search"
-                        ),
-                        CustomShortcut.Search("call", "tel:%s", "Call"),
-                        CustomShortcut.Search("sms", "sms:%s", "Send SMS"),
-                        CustomShortcut.Search("mailto", "mailto:%s", "Send Email to"),
-                        CustomShortcut.Search("gmail", "gmail://search/%s", "Gmail Search"),
-                        CustomShortcut.Search(
-                                "cal",
-                                "intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=%s;end",
-                                "Add Calendar Item"
+                                trigger = "g",
+                                urlTemplate = "https://www.google.com/search?q=%s",
+                                description = "Google Search",
+                                suggestionUrl =
+                                        "http://suggestqueries.google.com/complete/search?client=firefox&q=%s"
                         ),
                         CustomShortcut.Search(
-                                "ff",
-                                "https://www.google.com/search?q=%s",
-                                "Firefox Search",
-                                "org.mozilla.firefox"
+                                trigger = "call",
+                                urlTemplate = "tel:%s",
+                                description = "Call"
                         ),
                         CustomShortcut.Search(
-                                "yt",
-                                "https://www.youtube.com/results?search_query=%s",
-                                "YouTube Search"
-                        ),
-                        CustomShortcut.Search("nav", "geo:0,0?q=%s", "Navigate to"),
-                        CustomShortcut.Search(
-                                "maps",
-                                "https://www.google.com/maps/search/%s",
-                                "Google Maps Search"
+                                trigger = "sms",
+                                urlTemplate = "sms:%s",
+                                description = "Send SMS"
                         ),
                         CustomShortcut.Search(
-                                "r",
-                                "https://www.reddit.com/search/?q=%s",
-                                "Reddit Search"
+                                trigger = "mailto",
+                                urlTemplate = "mailto:%s",
+                                description = "Send Email to"
                         ),
                         CustomShortcut.Search(
-                                "w",
-                                "https://en.wikipedia.org/w/index.php?search=%s",
-                                "Wikipedia Search"
+                                trigger = "gmail",
+                                urlTemplate = "gmail://search/%s",
+                                description = "Gmail Search"
                         ),
-                        CustomShortcut.Search("gpt", "https://chatgpt.com/?q=%s", "ChatGPT"),
                         CustomShortcut.Search(
-                                "s",
-                                "spotify:search:%s",
-                                "Spotify Search",
-                                "com.spotify.music"
+                                trigger = "cal",
+                                urlTemplate =
+                                        "intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=%s;end",
+                                description = "Add Calendar Item"
+                        ),
+                        CustomShortcut.Search(
+                                trigger = "ff",
+                                urlTemplate = "https://www.google.com/search?q=%s",
+                                description = "Firefox Search",
+                                packageName = "org.mozilla.firefox"
+                        ),
+                        CustomShortcut.Search(
+                                trigger = "yt",
+                                urlTemplate = "https://www.youtube.com/results?search_query=%s",
+                                description = "YouTube Search",
+                                suggestionUrl =
+                                        "http://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=%s"
+                        ),
+                        CustomShortcut.Search(
+                                trigger = "nav",
+                                urlTemplate = "geo:0,0?q=%s",
+                                description = "Navigate to"
+                        ),
+                        CustomShortcut.Search(
+                                trigger = "maps",
+                                urlTemplate = "https://www.google.com/maps/search/%s",
+                                description = "Google Maps Search"
+                        ),
+                        CustomShortcut.Search(
+                                trigger = "r",
+                                urlTemplate = "https://www.reddit.com/search/?q=%s",
+                                description = "Reddit Search"
+                        ),
+                        CustomShortcut.Search(
+                                trigger = "w",
+                                urlTemplate = "https://en.wikipedia.org/w/index.php?search=%s",
+                                description = "Wikipedia Search"
+                        ),
+                        CustomShortcut.Search(
+                                trigger = "gpt",
+                                urlTemplate = "https://chatgpt.com/?q=%s",
+                                description = "ChatGPT"
+                        ),
+                        CustomShortcut.Action(
+                                intentUri =
+                                        "intent:#Intent;action=org.mozilla.fenix.OPEN_PRIVATE_TAB;package=org.mozilla.firefox;component=org.mozilla.firefox/org.mozilla.fenix.IntentReceiverActivity;end",
+                                description = "Firefox Private Tab",
+                                packageName = "org.mozilla.firefox"
+                        ),
+                        CustomShortcut.Search(
+                                trigger = "s",
+                                urlTemplate = "spotify:search:%s",
+                                description = "Spotify Search",
+                                packageName = "com.spotify.music"
+                        ),
+                        CustomShortcut.Action(
+                                intentUri =
+                                        "intent:#Intent;action=com.searchlauncher.RESET_INDEX;end",
+                                description = "Reset Search Index"
                         )
                 ) + generateSettingsShortcuts()
 }

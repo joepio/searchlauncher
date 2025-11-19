@@ -13,7 +13,11 @@
   },
   "[kotlin]": {
     "editor.tabSize": 4,
-    "editor.formatOnSave": true
+    "editor.insertSpaces": true,
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "fwcd.kotlin"
   },
-  "kotlin.languageServer.enabled": true
+  "kotlin.languageServer.enabled": true,
+  "kotlin.formatter": "ktfmt",
+  "kotlin.ktfmt.style": "kotlinlang"
 }
