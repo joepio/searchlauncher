@@ -723,6 +723,12 @@ class SearchRepository(private val context: Context) {
                                 }
                         }
 
+                        // Add Smart Actions (Phone/Email)
+                        if (query.isNotEmpty()) {
+                                val smartActions = checkSmartActions(query)
+                                results.addAll(smartActions)
+                        }
+
                         try {
                                 val searchSpecBuilder =
                                         SearchSpec.Builder()
@@ -1086,5 +1092,61 @@ class SearchRepository(private val context: Context) {
                                 )
                         }
                 }
+        }
+
+        private fun checkSmartActions(query: String): List<SearchResult> {
+                val results = mutableListOf<SearchResult>()
+
+                // Phone Number Check
+                if (android.util.Patterns.PHONE.matcher(query).matches() && query.length >= 3) {
+                        // Call Action
+                        val callIcon = context.getDrawable(android.R.drawable.sym_action_call)
+                        results.add(
+                                SearchResult.Content(
+                                        id = "smart_action_call_$query",
+                                        namespace = "smart_actions",
+                                        title = "Call $query",
+                                        subtitle = "Phone",
+                                        icon = callIcon,
+                                        packageName = "com.android.dialer", // Best effort
+                                        deepLink = "tel:$query",
+                                        rankingScore = 100 // High priority
+                                )
+                        )
+
+                        // Text Action
+                        val messageIcon = context.getDrawable(android.R.drawable.sym_action_chat)
+                        results.add(
+                                SearchResult.Content(
+                                        id = "smart_action_sms_$query",
+                                        namespace = "smart_actions",
+                                        title = "Text $query",
+                                        subtitle = "SMS",
+                                        icon = messageIcon,
+                                        packageName = "com.android.mms", // Best effort
+                                        deepLink = "sms:$query",
+                                        rankingScore = 99 // Slightly lower than call
+                                )
+                        )
+                }
+
+                // Email Check
+                if (android.util.Patterns.EMAIL_ADDRESS.matcher(query).matches()) {
+                        val emailIcon = context.getDrawable(android.R.drawable.sym_action_email)
+                        results.add(
+                                SearchResult.Content(
+                                        id = "smart_action_email_$query",
+                                        namespace = "smart_actions",
+                                        title = "Send Email to $query",
+                                        subtitle = "Email",
+                                        icon = emailIcon,
+                                        packageName = "com.android.email", // Best effort
+                                        deepLink = "mailto:$query",
+                                        rankingScore = 100
+                                )
+                        )
+                }
+
+                return results
         }
 }
