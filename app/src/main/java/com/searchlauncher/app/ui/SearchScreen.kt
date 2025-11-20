@@ -126,34 +126,18 @@ fun SearchScreen(
             // Use a higher limit to show all options as requested
             val shortcuts = searchRepository.getSearchShortcuts(limit = 50)
 
-            // Filter out shortcuts that might be duplicates of what's already in results
-            // (though unlikely as apps vs shortcuts, but good practice)
-            // In this case, we just append them.
-
             if (results.isEmpty()) {
                 // Only shortcuts
                 searchResults = shortcuts
                 isFallbackMode = true
             } else {
                 // Apps + Shortcuts
-                searchResults = results + shortcuts
-                // If we have app results, we are NOT in strict fallback mode
-                // (meaning Enter key will launch the top app result, not the shortcut logic)
-                // UNLESS the user explicitly scrolls or selects.
-                // But wait, the user request: "Always append them... simpler logic"
+                // Filter out shortcuts that are already in results (by id)
+                // to avoid duplicate keys in LazyColumn
+                val resultIds = results.map { it.id }.toSet()
+                val uniqueShortcuts = shortcuts.filter { !resultIds.contains(it.id) }
 
-                // If I type "g", I get "Gmail" (App) and "Google" (Shortcut).
-                // If I press Enter, it should launch "Gmail" (top result).
-                // If I type "random", I get NO apps, but "Google" (Shortcut) is top.
-                // If I press Enter, it should launch "Google" (fallback logic).
-
-                // So isFallbackMode effectively means "Are the top results purely suggested
-                // shortcuts because no apps matched?"
-                // But here we are mixing them.
-
-                // Let's define isFallbackMode as: Are there any 'real' matches
-                // (Apps/Contacts/Content)?
-                // If results (apps) is NOT empty, then we are NOT in fallback mode.
+                searchResults = results + uniqueShortcuts
                 isFallbackMode = false
             }
         }
@@ -360,7 +344,24 @@ fun SearchScreen(
                                             },
                                             onClick = {
                                                 if (result is SearchResult.SearchIntent) {
-                                                    if (isFallbackMode && query.isNotEmpty()) {
+                                                    // If the title implies a direct search (or we
+                                                    // are in fallback mode with query), perform
+                                                    // search
+                                                    // OR if the result title was modified to
+                                                    // include "Search ... on ..."
+                                                    // A better check: if query is not empty AND
+                                                    // it's not just the trigger itself.
+                                                    // The logic below handles both cases.
+
+                                                    // If it's a "Search X on Y" action (inferred
+                                                    // from query context)
+                                                    if (query.isNotEmpty() &&
+                                                                    !result.trigger.equals(
+                                                                            query.trim(),
+                                                                            ignoreCase = true
+                                                                    )
+                                                    ) {
+                                                        // Perform Search
                                                         val shortcut =
                                                                 com.searchlauncher.app.data
                                                                         .CustomShortcuts.shortcuts
@@ -410,6 +411,7 @@ fun SearchScreen(
                                                             }
                                                         }
                                                     } else {
+                                                        // Enter sub-search mode (append trigger)
                                                         onQueryChange(result.trigger + " ")
                                                     }
                                                 } else {
@@ -476,7 +478,12 @@ fun SearchScreen(
                                     com.searchlauncher.app.data.CustomShortcuts.shortcuts
                                             .filterIsInstance<
                                                     com.searchlauncher.app.data.CustomShortcut.Search>()
-                                            .find { query.startsWith("${it.trigger} ") }
+                                            .find {
+                                                query.startsWith(
+                                                        "${it.trigger} ",
+                                                        ignoreCase = true
+                                                )
+                                            }
                                 }
 
                         if (activeShortcut != null) {
