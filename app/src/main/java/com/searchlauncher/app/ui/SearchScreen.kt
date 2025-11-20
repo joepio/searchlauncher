@@ -82,6 +82,13 @@ fun SearchScreen(
     var showQuickCopyDialog by remember { mutableStateOf(false) }
     var quickCopyEditMode by remember { mutableStateOf(false) }
     var quickCopyItemToEdit by remember { mutableStateOf<SearchResult.QuickCopy?>(null) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    LaunchedEffect(searchResults) {
+        if (searchResults.isNotEmpty()) {
+            listState.scrollToItem(0)
+        }
+    }
 
     LaunchedEffect(focusTrigger) { focusRequester.requestFocus() }
 
@@ -160,6 +167,7 @@ fun SearchScreen(
                             ) { CircularProgressIndicator() }
                         } else {
                             LazyColumn(
+                                    state = listState,
                                     reverseLayout = true,
                                     contentPadding = PaddingValues(vertical = 8.dp)
                             ) {
