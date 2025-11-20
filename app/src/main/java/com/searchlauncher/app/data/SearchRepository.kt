@@ -266,10 +266,9 @@ class SearchRepository(private val context: Context) {
                                                                 .setResultCountPerPage(50)
                                                                 .build()
 
-                                                // Try searching for common terms that would match
-                                                // shortcuts
+                                                // Try searching for everything in the namespace to get usage stats for all shortcuts
                                                 val searchResults =
-                                                        session.search("search", searchSpec)
+                                                        session.search("", searchSpec)
                                                 val page = searchResults.nextPageAsync.get()
 
                                                 // Build a map of document ID to usage count

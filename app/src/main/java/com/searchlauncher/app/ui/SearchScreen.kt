@@ -121,13 +121,39 @@ fun SearchScreen(
         } else {
             val results = searchRepository.searchApps(query)
             android.util.Log.d("SearchScreen", "Query: '$query', Results: ${results.size}")
+
+            // Always append search shortcuts to the end of the results
+            // Use a higher limit to show all options as requested
+            val shortcuts = searchRepository.getSearchShortcuts(limit = 50)
+
+            // Filter out shortcuts that might be duplicates of what's already in results
+            // (though unlikely as apps vs shortcuts, but good practice)
+            // In this case, we just append them.
+
             if (results.isEmpty()) {
-                val shortcuts = searchRepository.getSearchShortcuts(limit = 10)
-                android.util.Log.d("SearchScreen", "Showing ${shortcuts.size} search shortcuts")
+                // Only shortcuts
                 searchResults = shortcuts
                 isFallbackMode = true
             } else {
-                searchResults = results
+                // Apps + Shortcuts
+                searchResults = results + shortcuts
+                // If we have app results, we are NOT in strict fallback mode
+                // (meaning Enter key will launch the top app result, not the shortcut logic)
+                // UNLESS the user explicitly scrolls or selects.
+                // But wait, the user request: "Always append them... simpler logic"
+
+                // If I type "g", I get "Gmail" (App) and "Google" (Shortcut).
+                // If I press Enter, it should launch "Gmail" (top result).
+                // If I type "random", I get NO apps, but "Google" (Shortcut) is top.
+                // If I press Enter, it should launch "Google" (fallback logic).
+
+                // So isFallbackMode effectively means "Are the top results purely suggested
+                // shortcuts because no apps matched?"
+                // But here we are mixing them.
+
+                // Let's define isFallbackMode as: Are there any 'real' matches
+                // (Apps/Contacts/Content)?
+                // If results (apps) is NOT empty, then we are NOT in fallback mode.
                 isFallbackMode = false
             }
         }
