@@ -44,12 +44,14 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
+import coil.compose.AsyncImage
 import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.data.SearchResult
 import com.searchlauncher.app.ui.theme.SearchLauncherTheme
@@ -67,7 +69,8 @@ fun SearchScreen(
         onOpenSettings: () -> Unit,
         searchRepository: SearchRepository,
         focusTrigger: Long = 0L,
-        showHistory: Boolean = true
+        showHistory: Boolean = true,
+        showBackgroundImage: Boolean = false
 ) {
     var searchResults by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
@@ -143,6 +146,15 @@ fun SearchScreen(
                     .map { it[MainActivity.PreferencesKeys.DARK_MODE] ?: 0 }
                     .collectAsState(initial = 0)
 
+    val backgroundUriString by
+            context.dataStore
+                    .data
+                    .map {
+                        if (showBackgroundImage) it[MainActivity.PreferencesKeys.BACKGROUND_URI]
+                        else null
+                    }
+                    .collectAsState(initial = null)
+
     SearchLauncherTheme(
             themeColor = themeColor,
             darkThemeMode = darkMode,
@@ -151,10 +163,46 @@ fun SearchScreen(
         Box(
                 modifier =
                         Modifier.fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.9f))
                                 .clickable { onDismiss() }
                                 .windowInsetsPadding(WindowInsets.statusBars)
         ) {
+            // Background: either image or solid color
+            if (backgroundUriString != null) {
+                AsyncImage(
+                        model = android.net.Uri.parse(backgroundUriString),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                // Solid background when no image
+                Box(
+                        modifier =
+                                Modifier.fillMaxSize()
+                                        .background(
+                                                MaterialTheme.colorScheme.background.copy(
+                                                        alpha = 0.9f
+                                                )
+                                        )
+                )
+            }
+
+            // Debug: Show background URI in toast
+            LaunchedEffect(backgroundUriString, showBackgroundImage) {
+                android.util.Log.d(
+                        "SearchScreen",
+                        "Background URI: $backgroundUriString, showBackgroundImage: $showBackgroundImage"
+                )
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                                    context,
+                                    "URI: ${backgroundUriString?.take(30) ?: "NULL"}, show=$showBackgroundImage",
+                                    android.widget.Toast.LENGTH_LONG
+                            )
+                            .show()
+                }
+            }
+
             Column(
                     modifier =
                             Modifier.fillMaxSize()

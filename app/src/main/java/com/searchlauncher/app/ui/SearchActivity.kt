@@ -49,7 +49,8 @@ class SearchActivity : ComponentActivity() {
                     },
                     searchRepository = (application as SearchLauncherApp).searchRepository,
                     focusTrigger = 0L,
-                    showHistory = showHistory.value
+                    showHistory = showHistory.value,
+                    showBackgroundImage = false
             )
         }
     }

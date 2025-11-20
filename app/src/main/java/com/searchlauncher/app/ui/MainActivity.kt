@@ -7,15 +7,19 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -26,6 +30,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
@@ -35,6 +42,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import coil.compose.AsyncImage
 import com.searchlauncher.app.SearchLauncherApp
 import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.service.OverlayService
@@ -166,7 +174,8 @@ class MainActivity : ComponentActivity() {
                                 onOpenSettings = { currentScreenState = Screen.Settings },
                                 searchRepository = app.searchRepository,
                                 focusTrigger = focusTrigger,
-                                showHistory = showHistory.value
+                                showHistory = showHistory.value,
+                                showBackgroundImage = true
                         )
                     }
                     Screen.Settings -> {
@@ -204,7 +213,11 @@ class MainActivity : ComponentActivity() {
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val THEME_COLOR = intPreferencesKey("theme_color")
         val THEME_SATURATION = floatPreferencesKey("theme_saturation")
-        val DARK_MODE = intPreferencesKey("dark_mode") // 0: System, 1: Light, 2: Dark
+        val DARK_MODE = intPreferencesKey("dark_mode")
+        val BACKGROUND_URI =
+                androidx.datastore.preferences.core.stringPreferencesKey(
+                        "background_uri"
+                ) // 0: System, 1: Light, 2: Dark
     }
 }
 
@@ -266,7 +279,7 @@ fun HomeScreen(
             Text(text = "SearchLauncher", style = MaterialTheme.typography.headlineLarge)
         }
 
-        ThemeSettingsCard()
+        ThemeSettingsCard(onNavigateToHome = onBack)
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(
@@ -802,153 +815,215 @@ private fun QuickCopyDialog(
 }
 
 @Composable
-private fun ThemeSettingsCard() {
+private fun ThemeSettingsCard(onNavigateToHome: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val themeColor =
+    val themeColor by
             context.dataStore
                     .data
                     .map { it[MainActivity.PreferencesKeys.THEME_COLOR] ?: 0xFF00639B.toInt() }
                     .collectAsState(initial = 0xFF00639B.toInt())
 
-    val themeSaturation =
+    val themeSaturation by
             context.dataStore
                     .data
                     .map { it[MainActivity.PreferencesKeys.THEME_SATURATION] ?: 50f }
                     .collectAsState(initial = 50f)
-
-    val darkMode =
+    val darkMode by
             context.dataStore
                     .data
                     .map { it[MainActivity.PreferencesKeys.DARK_MODE] ?: 0 }
                     .collectAsState(initial = 0)
+    val backgroundUriString by
+            context.dataStore
+                    .data
+                    .map { it[MainActivity.PreferencesKeys.BACKGROUND_URI] }
+                    .collectAsState(initial = null)
 
-    val colors =
-            listOf(
-                    0xFF00639B.toInt(), // Blue
-                    0xFF6750A4.toInt(), // Purple
-                    0xFFBF0031.toInt(), // Red
-                    0xFF006D3B.toInt(), // Green
-                    0xFF6F5B40.toInt(), // Brown
-                    0xFF5D5F5F.toInt(), // Grey
-                    0xFF9C4146.toInt(), // Pink
-                    0xFF006874.toInt() // Teal
+    val launcher =
+            rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenDocument(),
+                    onResult = { uri: Uri? ->
+                        uri?.let {
+                            val flag = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            context.contentResolver.takePersistableUriPermission(it, flag)
+                            scope.launch {
+                                context.dataStore.edit { preferences ->
+                                    preferences[MainActivity.PreferencesKeys.BACKGROUND_URI] =
+                                            it.toString()
+                                }
+                                // Navigate after save completes
+                                withContext(Dispatchers.Main) { onNavigateToHome() }
+                            }
+                        }
+                    }
             )
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Theme Color", style = MaterialTheme.typography.titleMedium)
-                Text(
-                        text = "Select a base color for the app theme",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    colors.forEach { color ->
-                        Box(
-                                modifier =
-                                        Modifier.size(32.dp)
-                                                .background(
-                                                        androidx.compose.ui.graphics.Color(color),
-                                                        androidx.compose.foundation.shape
-                                                                .CircleShape
-                                                )
-                                                .clickable {
-                                                    scope.launch {
-                                                        context.dataStore.edit { preferences ->
-                                                            preferences[
-                                                                    MainActivity.PreferencesKeys
-                                                                            .THEME_COLOR] = color
-                                                        }
-                                                        withContext(Dispatchers.Main) {
-                                                            android.widget.Toast.makeText(
-                                                                            context,
-                                                                            "Theme updated",
-                                                                            android.widget.Toast
-                                                                                    .LENGTH_SHORT
-                                                                    )
-                                                                    .show()
-                                                        }
-                                                    }
-                                                }
-                                                .then(
-                                                        if (themeColor.value == color) {
-                                                            Modifier.border(
-                                                                    2.dp,
-                                                                    MaterialTheme.colorScheme
-                                                                            .onSurface,
-                                                                    androidx.compose.foundation
-                                                                            .shape.CircleShape
-                                                            )
-                                                        } else Modifier
-                                                )
+    Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors =
+                    CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                    text = "Theme Color",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                val colors =
+                        listOf(
+                                0xFF00639B, // Blue
+                                0xFF6750A4, // Purple
+                                0xFF984061, // Red/Pink
+                                0xFF3F6900, // Green
+                                0xFF8F4C38, // Brown
                         )
-                    }
+
+                colors.forEach { color ->
+                    Box(
+                            modifier =
+                                    Modifier.size(48.dp)
+                                            .background(Color(color), shape = CircleShape)
+                                            .border(
+                                                    width =
+                                                            if (themeColor == color.toInt()) 4.dp
+                                                            else 0.dp,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    shape = CircleShape
+                                            )
+                                            .clickable {
+                                                scope.launch {
+                                                    context.dataStore.edit { preferences ->
+                                                        preferences[
+                                                                MainActivity.PreferencesKeys
+                                                                        .THEME_COLOR] =
+                                                                color.toInt()
+                                                    }
+                                                    Toast.makeText(
+                                                                    context,
+                                                                    "Theme updated",
+                                                                    Toast.LENGTH_SHORT
+                                                            )
+                                                            .show()
+                                                }
+                                            }
+                    )
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
             Divider()
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Saturation", style = MaterialTheme.typography.titleMedium)
-                Slider(
-                        value = themeSaturation.value,
-                        onValueChange = { newValue ->
-                            scope.launch {
-                                context.dataStore.edit { preferences ->
-                                    preferences[MainActivity.PreferencesKeys.THEME_SATURATION] =
-                                            newValue
-                                }
+            Text(
+                    text = "Saturation",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Slider(
+                    value = themeSaturation,
+                    onValueChange = { newValue ->
+                        scope.launch {
+                            context.dataStore.edit { preferences ->
+                                preferences[MainActivity.PreferencesKeys.THEME_SATURATION] =
+                                        newValue
                             }
-                        },
-                        valueRange = 0f..100f
-                )
-            }
+                        }
+                    },
+                    valueRange = 0f..100f
+            )
 
+            Spacer(modifier = Modifier.height(16.dp))
             Divider()
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Dark Mode", style = MaterialTheme.typography.titleMedium)
-                Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf("System" to 0, "Light" to 1, "Dark" to 2).forEach { (label, mode) ->
-                        val isSelected = darkMode.value == mode
-                        OutlinedButton(
-                                onClick = {
-                                    scope.launch {
-                                        context.dataStore.edit { preferences ->
-                                            preferences[MainActivity.PreferencesKeys.DARK_MODE] =
-                                                    mode
-                                        }
+            Text(
+                    text = "Dark Mode",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                val modes = listOf("System", "Light", "Dark")
+                modes.forEachIndexed { index, mode ->
+                    OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    context.dataStore.edit { preferences ->
+                                        preferences[MainActivity.PreferencesKeys.DARK_MODE] = index
                                     }
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors =
-                                        if (isSelected) {
+                                }
+                            },
+                            colors =
+                                    if (darkMode == index)
                                             ButtonDefaults.outlinedButtonColors(
                                                     containerColor =
                                                             MaterialTheme.colorScheme
-                                                                    .secondaryContainer,
+                                                                    .primaryContainer,
                                                     contentColor =
                                                             MaterialTheme.colorScheme
-                                                                    .onSecondaryContainer
+                                                                    .onPrimaryContainer
                                             )
-                                        } else {
-                                            ButtonDefaults.outlinedButtonColors()
-                                        }
-                        ) { Text(label) }
-                    }
+                                    else ButtonDefaults.outlinedButtonColors()
+                    ) { Text(mode) }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Divider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                    text = "Background Image",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                        onClick = { launcher.launch(arrayOf("image/*")) },
+                        modifier = Modifier.weight(1f)
+                ) { Text("Pick Image") }
+                if (backgroundUriString != null) {
+                    OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    context.dataStore.edit { preferences ->
+                                        preferences.remove(
+                                                MainActivity.PreferencesKeys.BACKGROUND_URI
+                                        )
+                                    }
+                                    // Navigate after clear completes
+                                    withContext(Dispatchers.Main) { onNavigateToHome() }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                    ) { Text("Clear Image") }
+                }
+            }
+
+            // Preview of selected image
+            if (backgroundUriString != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                AsyncImage(
+                        model = android.net.Uri.parse(backgroundUriString),
+                        contentDescription = "Background preview",
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier =
+                                Modifier.fillMaxWidth()
+                                        .height(120.dp)
+                                        .clip(MaterialTheme.shapes.medium)
+                )
             }
         }
     }
