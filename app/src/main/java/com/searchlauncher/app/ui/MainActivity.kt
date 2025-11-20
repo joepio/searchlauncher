@@ -15,8 +15,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +29,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +42,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import coil.compose.AsyncImage
+import com.google.android.material.color.utilities.Hct
 import com.searchlauncher.app.SearchLauncherApp
 import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.service.OverlayService
@@ -872,49 +872,53 @@ private fun ThemeSettingsCard(onNavigateToHome: () -> Unit) {
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
             )
-            Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                val colors =
-                        listOf(
-                                0xFF00639B, // Blue
-                                0xFF6750A4, // Purple
-                                0xFF984061, // Red/Pink
-                                0xFF3F6900, // Green
-                                0xFF8F4C38, // Brown
-                        )
 
-                colors.forEach { color ->
-                    Box(
-                            modifier =
-                                    Modifier.size(48.dp)
-                                            .background(Color(color), shape = CircleShape)
-                                            .border(
-                                                    width =
-                                                            if (themeColor == color.toInt()) 4.dp
-                                                            else 0.dp,
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                    shape = CircleShape
-                                            )
-                                            .clickable {
-                                                scope.launch {
-                                                    context.dataStore.edit { preferences ->
-                                                        preferences[
-                                                                MainActivity.PreferencesKeys
-                                                                        .THEME_COLOR] =
-                                                                color.toInt()
-                                                    }
-                                                    Toast.makeText(
-                                                                    context,
-                                                                    "Theme updated",
-                                                                    Toast.LENGTH_SHORT
-                                                            )
-                                                            .show()
-                                                }
-                                            }
-                    )
-                }
+            val hct = remember(themeColor) { Hct.fromInt(themeColor) }
+            var hue by remember(themeColor) { mutableStateOf(hct.hue.toFloat()) }
+
+            Box(contentAlignment = Alignment.Center) {
+                // Gradient background
+                Box(
+                        modifier =
+                                Modifier.fillMaxWidth()
+                                        .height(12.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                                brush =
+                                                        Brush.horizontalGradient(
+                                                                colors =
+                                                                        listOf(
+                                                                                Color.Red,
+                                                                                Color.Yellow,
+                                                                                Color.Green,
+                                                                                Color.Cyan,
+                                                                                Color.Blue,
+                                                                                Color.Magenta,
+                                                                                Color.Red
+                                                                        )
+                                                        )
+                                        )
+                )
+
+                Slider(
+                        value = hue,
+                        onValueChange = { hue = it },
+                        onValueChangeFinished = {
+                            scope.launch {
+                                val newColor = Hct.from(hue.toDouble(), 48.0, 40.0).toInt()
+                                context.dataStore.edit { preferences ->
+                                    preferences[MainActivity.PreferencesKeys.THEME_COLOR] = newColor
+                                }
+                            }
+                        },
+                        valueRange = 0f..360f,
+                        colors =
+                                SliderDefaults.colors(
+                                        thumbColor = Color.White,
+                                        activeTrackColor = Color.Transparent,
+                                        inactiveTrackColor = Color.Transparent
+                                )
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
