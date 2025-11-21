@@ -10,14 +10,12 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -28,10 +26,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
@@ -42,8 +36,6 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.lifecycleScope
-import coil.compose.AsyncImage
-import com.google.android.material.color.utilities.Hct
 import com.searchlauncher.app.SearchLauncherApp
 import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.service.OverlayService
@@ -749,14 +741,7 @@ private fun QuickCopyCard() {
                 )
 
                 quickCopyItems.value.forEach { item ->
-                    Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors =
-                                    CardDefaults.cardColors(
-                                            containerColor =
-                                                    MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                    ) {
+                    Card(modifier = Modifier.fillMaxWidth()) {
                         Row(
                                 modifier = Modifier.fillMaxWidth().padding(12.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -875,213 +860,6 @@ private fun QuickCopyDialog(
             },
             dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
-}
-
-@Composable
-private fun ThemeSettingsCard(onNavigateToHome: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val themeColor by
-            context.dataStore
-                    .data
-                    .map { it[MainActivity.PreferencesKeys.THEME_COLOR] ?: 0xFF00639B.toInt() }
-                    .collectAsState(initial = 0xFF00639B.toInt())
-
-    val themeSaturation by
-            context.dataStore
-                    .data
-                    .map { it[MainActivity.PreferencesKeys.THEME_SATURATION] ?: 50f }
-                    .collectAsState(initial = 50f)
-    val darkMode by
-            context.dataStore
-                    .data
-                    .map { it[MainActivity.PreferencesKeys.DARK_MODE] ?: 0 }
-                    .collectAsState(initial = 0)
-    val backgroundUriString by
-            context.dataStore
-                    .data
-                    .map { it[MainActivity.PreferencesKeys.BACKGROUND_URI] }
-                    .collectAsState(initial = null)
-
-    val launcher =
-            rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.OpenDocument(),
-                    onResult = { uri: Uri? ->
-                        uri?.let {
-                            val flag = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                            context.contentResolver.takePersistableUriPermission(it, flag)
-                            scope.launch {
-                                context.dataStore.edit { preferences ->
-                                    preferences[MainActivity.PreferencesKeys.BACKGROUND_URI] =
-                                            it.toString()
-                                }
-                                // Navigate after save completes
-                                withContext(Dispatchers.Main) { onNavigateToHome() }
-                            }
-                        }
-                    }
-            )
-
-    Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors =
-                    CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                    text = "Theme Color",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            val hct = remember(themeColor) { Hct.fromInt(themeColor) }
-            var hue by remember(themeColor) { mutableStateOf(hct.hue.toFloat()) }
-
-            Box(contentAlignment = Alignment.Center) {
-                // Gradient background
-                Box(
-                        modifier =
-                                Modifier.fillMaxWidth()
-                                        .height(12.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                                brush =
-                                                        Brush.horizontalGradient(
-                                                                colors =
-                                                                        listOf(
-                                                                                Color.Red,
-                                                                                Color.Yellow,
-                                                                                Color.Green,
-                                                                                Color.Cyan,
-                                                                                Color.Blue,
-                                                                                Color.Magenta,
-                                                                                Color.Red
-                                                                        )
-                                                        )
-                                        )
-                )
-
-                Slider(
-                        value = hue,
-                        onValueChange = { hue = it },
-                        onValueChangeFinished = {
-                            scope.launch {
-                                val newColor = Hct.from(hue.toDouble(), 48.0, 40.0).toInt()
-                                context.dataStore.edit { preferences ->
-                                    preferences[MainActivity.PreferencesKeys.THEME_COLOR] = newColor
-                                }
-                            }
-                        },
-                        valueRange = 0f..360f,
-                        colors =
-                                SliderDefaults.colors(
-                                        thumbColor = Color.White,
-                                        activeTrackColor = Color.Transparent,
-                                        inactiveTrackColor = Color.Transparent
-                                )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                    text = "Saturation",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Slider(
-                    value = themeSaturation,
-                    onValueChange = { newValue ->
-                        scope.launch {
-                            context.dataStore.edit { preferences ->
-                                preferences[MainActivity.PreferencesKeys.THEME_SATURATION] =
-                                        newValue
-                            }
-                        }
-                    },
-                    valueRange = 0f..100f
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                    text = "Dark Mode",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-            )
-            val modes = listOf("System", "Light", "Dark")
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                modes.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(index, modes.lastIndex),
-                            selected = darkMode == index,
-                            onClick = {
-                                scope.launch {
-                                    context.dataStore.edit { preferences ->
-                                        preferences[MainActivity.PreferencesKeys.DARK_MODE] = index
-                                    }
-                                }
-                            }
-                    ) { Text(mode) }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                    text = "Background Image",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                        onClick = { launcher.launch(arrayOf("image/*")) },
-                        modifier = Modifier.weight(1f)
-                ) { Text("Pick Image") }
-                if (backgroundUriString != null) {
-                    OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    context.dataStore.edit { preferences ->
-                                        preferences.remove(
-                                                MainActivity.PreferencesKeys.BACKGROUND_URI
-                                        )
-                                    }
-                                    // Navigate after clear completes
-                                    withContext(Dispatchers.Main) { onNavigateToHome() }
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                    ) { Text("Clear Image") }
-                }
-            }
-
-            // Preview of selected image
-            if (backgroundUriString != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                AsyncImage(
-                        model = android.net.Uri.parse(backgroundUriString),
-                        contentDescription = "Background preview",
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        modifier =
-                                Modifier.fillMaxWidth()
-                                        .height(120.dp)
-                                        .clip(MaterialTheme.shapes.medium)
-                )
-            }
-        }
-    }
 }
 
 @Composable
