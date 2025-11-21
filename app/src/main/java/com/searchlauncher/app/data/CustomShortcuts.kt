@@ -190,7 +190,7 @@ object CustomShortcuts {
                 trigger = "tt",
                 urlTemplate = "https://www.tiktok.com/search?q=%s",
                 description = "TikTok Search",
-                color = 0x000000
+                color = 0xFF000000
             ),
             CustomShortcut.Search(
                 trigger = "w",
@@ -204,11 +204,17 @@ object CustomShortcuts {
                 description = "ChatGPT",
                 color = 0xFF10A37F
             ),
-            CustomShortcut.Action(
-                intentUri =
-                    "intent:#Intent;action=org.mozilla.fenix.OPEN_PRIVATE_TAB;package=org.mozilla.firefox;component=org.mozilla.firefox/org.mozilla.fenix.IntentReceiverActivity;end",
-                description = "Firefox Private Tab",
-                packageName = "org.mozilla.firefox"
+            CustomShortcut.Search(
+                trigger = "c",
+                urlTemplate = "https://chatgpt.com/?q=%s",
+                description = "Ask ChatGPT",
+                color = 0xFF10A37F
+            ),
+            CustomShortcut.Search(
+                trigger = "p",
+                urlTemplate = "market://search?q=%s",
+                description = "Play Store Search",
+                color = 0xFF01875F
             ),
             CustomShortcut.Search(
                 trigger = "s",
@@ -216,6 +222,12 @@ object CustomShortcuts {
                 description = "Spotify Search",
                 packageName = "com.spotify.music",
                 color = 0xFF1DB954
+            ),
+            CustomShortcut.Action(
+                intentUri =
+                    "intent:#Intent;action=org.mozilla.fenix.OPEN_PRIVATE_TAB;package=org.mozilla.firefox;component=org.mozilla.firefox/org.mozilla.fenix.IntentReceiverActivity;end",
+                description = "Firefox Private Tab",
+                packageName = "org.mozilla.firefox"
             ),
             CustomShortcut.Action(
                 intentUri =

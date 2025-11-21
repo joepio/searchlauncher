@@ -63,6 +63,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("com.google.android.material:material:1.12.0")
 
     // AppSearch
     implementation("androidx.appsearch:appsearch:1.1.0")
@@ -84,6 +85,7 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    implementation("io.coil-kt:coil-compose:2.5.0")
     testImplementation("org.robolectric:robolectric:4.16")
     testImplementation("io.mockk:mockk:1.14.6")
 }
