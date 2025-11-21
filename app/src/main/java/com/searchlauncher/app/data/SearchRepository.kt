@@ -634,6 +634,8 @@ class SearchRepository(private val context: Context) {
                         // 4. AppSearch Index
                         results.addAll(searchAppIndex(query, filterCustomShortcuts, limit))
 
+                        results.sortByDescending { it.rankingScore }
+
                         results
                 }
 
@@ -666,7 +668,8 @@ class SearchRepository(private val context: Context) {
                                 subtitle = "Custom Shortcut",
                                 icon = icon,
                                 packageName = shortcut.packageName ?: "android",
-                                deepLink = url
+                                deepLink = url,
+                                rankingScore = 200
                         )
                 )
 
@@ -687,7 +690,8 @@ class SearchRepository(private val context: Context) {
                                                 subtitle = "${shortcut.description} Suggestion",
                                                 icon = icon,
                                                 packageName = shortcut.packageName ?: "android",
-                                                deepLink = suggestionUrlFormatted
+                                                deepLink = suggestionUrlFormatted,
+                                                rankingScore = 200
                                         )
                                 )
                         }
@@ -701,6 +705,18 @@ class SearchRepository(private val context: Context) {
                 val clipboardIcon = context.getDrawable(android.R.drawable.ic_menu_edit)
 
                 return app.quickCopyRepository.searchItems(query).map { item ->
+                        val aliasLower = item.alias.lowercase()
+                        val queryLower = query.lowercase()
+
+                        val score =
+                                when {
+                                        aliasLower == queryLower -> 150 // Exact alias match
+                                        aliasLower.startsWith(queryLower) ->
+                                                90 // Prefix alias match
+                                        aliasLower.contains(queryLower) -> 50 // Partial alias match
+                                        else -> 40 // Content match
+                                }
+
                         SearchResult.QuickCopy(
                                 id = "quickcopy_${item.alias}",
                                 namespace = "quickcopy",
@@ -711,7 +727,7 @@ class SearchRepository(private val context: Context) {
                                 icon = clipboardIcon,
                                 alias = item.alias,
                                 content = item.content,
-                                rankingScore = 95
+                                rankingScore = score
                         )
                 }
         }
@@ -761,8 +777,25 @@ class SearchRepository(private val context: Context) {
                                         val boost =
                                                 if (isSettings) 15
                                                 else if (doc.namespace == "apps") 5 else 0
+
+                                        val name = doc.name
+                                        val queryLower = query.lowercase()
+                                        val nameLower = name.lowercase()
+
+                                        var matchBoost = 0
+                                        if (nameLower == queryLower) {
+                                                matchBoost = 100 // Exact match
+                                        } else if (nameLower.startsWith(queryLower)) {
+                                                matchBoost = 50 // Prefix match
+                                        } else if (nameLower.contains(queryLower)) {
+                                                matchBoost = 20 // Partial match
+                                        }
+
                                         appSearchResults.add(
-                                                convertDocumentToResult(doc, baseScore + boost)
+                                                convertDocumentToResult(
+                                                        doc,
+                                                        baseScore + boost + matchBoost
+                                                )
                                         )
                                 }
                                 if (limit > 0 && appSearchResults.size >= limit * 2) break

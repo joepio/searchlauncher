@@ -115,14 +115,14 @@ object CustomShortcuts {
                                 color = 0xFF4285F4
                         ),
                         CustomShortcut.Search(
-                                trigger = "dd",
+                                trigger = "d",
                                 urlTemplate = "https://duckduckgo.com/?q=%s",
                                 description = "DuckDuckGo Search",
                                 suggestionUrl = "https://ac.duckduckgo.com/ac/?q=%s&type=list",
                                 color = 0xFFDE5833
                         ),
                         CustomShortcut.Search(
-                                trigger = "bing",
+                                trigger = "b",
                                 urlTemplate = "https://www.bing.com/search?q=%s",
                                 description = "Bing Search",
                                 suggestionUrl = "https://api.bing.com/osjson.aspx?query=%s",
@@ -161,7 +161,7 @@ object CustomShortcuts {
                                 color = 0xFFFF9800
                         ),
                         CustomShortcut.Search(
-                                trigger = "yt",
+                                trigger = "y",
                                 urlTemplate = "https://www.youtube.com/results?search_query=%s",
                                 description = "YouTube Search",
                                 suggestionUrl =
@@ -175,7 +175,7 @@ object CustomShortcuts {
                                 color = 0xFF009688
                         ),
                         CustomShortcut.Search(
-                                trigger = "maps",
+                                trigger = "m",
                                 urlTemplate = "https://www.google.com/maps/search/%s",
                                 description = "Google Maps Search",
                                 color = 0xFF34A853
@@ -199,13 +199,13 @@ object CustomShortcuts {
                                 color = 0xFF808080
                         ),
                         CustomShortcut.Search(
-                                trigger = "gpt",
+                                trigger = "c",
                                 urlTemplate = "https://chatgpt.com/?q=%s",
-                                description = "ChatGPT",
+                                description = "Ask ChatGPT",
                                 color = 0xFF10A37F
                         ),
                         CustomShortcut.Search(
-                                trigger = "play",
+                                trigger = "p",
                                 urlTemplate = "market://search?q=%s",
                                 description = "Play Store",
                                 color = 0xFF01875F
