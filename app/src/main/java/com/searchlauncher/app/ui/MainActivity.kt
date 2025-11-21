@@ -910,7 +910,7 @@ private suspend fun MainActivity.performExport(uri: android.net.Uri) {
                     com.searchlauncher.app.data.BackupManager(
                             context = this@performExport,
                             quickCopyRepository = app.quickCopyRepository,
-                            customShortcutRepository = app.customShortcutRepository,
+                            searchShortcutRepository = app.searchShortcutRepository,
                             favoritesRepository = app.favoritesRepository
                     )
 
@@ -956,7 +956,7 @@ private suspend fun MainActivity.performImport(uri: android.net.Uri) {
                     com.searchlauncher.app.data.BackupManager(
                             context = this@performImport,
                             quickCopyRepository = app.quickCopyRepository,
-                            customShortcutRepository = app.customShortcutRepository,
+                            searchShortcutRepository = app.searchShortcutRepository,
                             favoritesRepository = app.favoritesRepository
                     )
 

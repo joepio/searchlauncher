@@ -24,9 +24,6 @@ class SearchLauncherApp : Application() {
     lateinit var favoritesRepository: FavoritesRepository
         private set
 
-    lateinit var customShortcutRepository: com.searchlauncher.app.data.CustomShortcutRepository
-        private set
-
     lateinit var searchShortcutRepository: com.searchlauncher.app.data.SearchShortcutRepository
         private set
 
@@ -35,7 +32,6 @@ class SearchLauncherApp : Application() {
         searchRepository = SearchRepository(this)
         quickCopyRepository = QuickCopyRepository(this)
         favoritesRepository = FavoritesRepository(this)
-        customShortcutRepository = com.searchlauncher.app.data.CustomShortcutRepository(this)
         searchShortcutRepository = com.searchlauncher.app.data.SearchShortcutRepository(this)
         CoroutineScope(Dispatchers.IO).launch { searchRepository.initialize() }
         createNotificationChannel()

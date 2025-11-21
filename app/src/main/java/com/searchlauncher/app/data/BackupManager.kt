@@ -16,11 +16,11 @@ import org.json.JSONObject
 class BackupManager(
         private val context: Context,
         private val quickCopyRepository: QuickCopyRepository,
-        private val customShortcutRepository: CustomShortcutRepository,
+        private val searchShortcutRepository: SearchShortcutRepository,
         private val favoritesRepository: FavoritesRepository
 ) {
         companion object {
-                const val BACKUP_VERSION = 1
+                const val BACKUP_VERSION = 2 // Bumped version for new format
                 private const val MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB limit
         }
 
@@ -40,26 +40,20 @@ class BackupManager(
                                 }
                                 backupData.put("quickCopy", quickCopyArray)
 
-                                // Export Custom Shortcuts (only Search type, not Action type)
+                                // Export Search Shortcuts
                                 val shortcutsArray = JSONArray()
-                                customShortcutRepository.items.value.filterIsInstance<
-                                                CustomShortcut.Search>()
-                                        .forEach { shortcut ->
-                                                val obj = JSONObject()
-                                                obj.put("type", "search")
-                                                obj.put("trigger", shortcut.trigger)
-                                                obj.put("urlTemplate", shortcut.urlTemplate)
-                                                obj.put("description", shortcut.description)
-                                                obj.put("color", shortcut.color)
-                                                shortcut.suggestionUrl?.let {
-                                                        obj.put("suggestionUrl", it)
-                                                }
-                                                shortcut.packageName?.let {
-                                                        obj.put("packageName", it)
-                                                }
-                                                shortcutsArray.put(obj)
-                                        }
-                                backupData.put("customShortcuts", shortcutsArray)
+                                searchShortcutRepository.items.value.forEach { shortcut ->
+                                        val obj = JSONObject()
+                                        obj.put("id", shortcut.id)
+                                        obj.put("alias", shortcut.alias)
+                                        obj.put("urlTemplate", shortcut.urlTemplate)
+                                        obj.put("description", shortcut.description)
+                                        shortcut.color?.let { obj.put("color", it) }
+                                        shortcut.suggestionUrl?.let { obj.put("suggestionUrl", it) }
+                                        shortcut.packageName?.let { obj.put("packageName", it) }
+                                        shortcutsArray.put(obj)
+                                }
+                                backupData.put("searchShortcuts", shortcutsArray)
 
                                 // Export Favorites
                                 val favoritesArray = JSONArray()
@@ -82,9 +76,7 @@ class BackupManager(
 
                                 val totalItems =
                                         quickCopyRepository.items.value.size +
-                                                customShortcutRepository.items.value
-                                                        .filterIsInstance<CustomShortcut.Search>()
-                                                        .size +
+                                                searchShortcutRepository.items.value.size +
                                                 favoritesRepository.getFavoriteIds().size
 
                                 Result.success(totalItems)
@@ -100,6 +92,8 @@ class BackupManager(
                                 val backupData = JSONObject(jsonString)
 
                                 val version = backupData.getInt("version")
+                                // We can support older versions if needed, but for now let's just
+                                // check
                                 if (version > BACKUP_VERSION) {
                                         return@withContext Result.failure(
                                                 Exception(
@@ -125,20 +119,70 @@ class BackupManager(
                                         }
                                 }
 
-                                // Import Custom Shortcuts (only Search type)
-                                if (backupData.has("customShortcuts")) {
+                                // Import Search Shortcuts
+                                if (backupData.has("searchShortcuts")) {
                                         val shortcutsArray =
-                                                backupData.getJSONArray("customShortcuts")
-                                        val searchShortcuts = mutableListOf<CustomShortcut.Search>()
+                                                backupData.getJSONArray("searchShortcuts")
+                                        val newShortcuts = mutableListOf<SearchShortcut>()
 
                                         for (i in 0 until shortcutsArray.length()) {
                                                 val obj = shortcutsArray.getJSONObject(i)
-                                                val type = obj.getString("type")
-
-                                                if (type == "search") {
+                                                val shortcut =
+                                                        SearchShortcut(
+                                                                id =
+                                                                        obj.optString(
+                                                                                "id",
+                                                                                java.util
+                                                                                        .UUID
+                                                                                        .randomUUID()
+                                                                                        .toString()
+                                                                        ),
+                                                                alias = obj.getString("alias"),
+                                                                urlTemplate =
+                                                                        obj.getString(
+                                                                                "urlTemplate"
+                                                                        ),
+                                                                description =
+                                                                        obj.getString(
+                                                                                "description"
+                                                                        ),
+                                                                color =
+                                                                        if (obj.has("color"))
+                                                                                obj.getLong("color")
+                                                                        else null,
+                                                                suggestionUrl =
+                                                                        obj.optString(
+                                                                                        "suggestionUrl"
+                                                                                )
+                                                                                .takeIf {
+                                                                                        it.isNotEmpty()
+                                                                                },
+                                                                packageName =
+                                                                        obj.optString("packageName")
+                                                                                .takeIf {
+                                                                                        it.isNotEmpty()
+                                                                                }
+                                                        )
+                                                newShortcuts.add(shortcut)
+                                                shortcutsCount++
+                                        }
+                                        searchShortcutRepository.replaceAll(newShortcuts)
+                                } else if (backupData.has("customShortcuts")) {
+                                        // Legacy backup support
+                                        val shortcutsArray =
+                                                backupData.getJSONArray("customShortcuts")
+                                        val newShortcuts = mutableListOf<SearchShortcut>()
+                                        for (i in 0 until shortcutsArray.length()) {
+                                                val obj = shortcutsArray.getJSONObject(i)
+                                                if (obj.getString("type") == "search") {
                                                         val shortcut =
-                                                                CustomShortcut.Search(
-                                                                        trigger =
+                                                                SearchShortcut(
+                                                                        id =
+                                                                                java.util
+                                                                                        .UUID
+                                                                                        .randomUUID()
+                                                                                        .toString(),
+                                                                        alias =
                                                                                 obj.getString(
                                                                                         "trigger"
                                                                                 ),
@@ -151,40 +195,29 @@ class BackupManager(
                                                                                         "description"
                                                                                 ),
                                                                         color =
-                                                                                obj.getLong(
+                                                                                obj.optLong(
                                                                                         "color"
                                                                                 ),
                                                                         suggestionUrl =
-                                                                                if (obj.has(
+                                                                                obj.optString(
                                                                                                 "suggestionUrl"
                                                                                         )
-                                                                                )
-                                                                                        obj.getString(
-                                                                                                "suggestionUrl"
-                                                                                        )
-                                                                                else null,
+                                                                                        .takeIf {
+                                                                                                it.isNotEmpty()
+                                                                                        },
                                                                         packageName =
-                                                                                if (obj.has(
+                                                                                obj.optString(
                                                                                                 "packageName"
                                                                                         )
-                                                                                )
-                                                                                        obj.getString(
-                                                                                                "packageName"
-                                                                                        )
-                                                                                else null
+                                                                                        .takeIf {
+                                                                                                it.isNotEmpty()
+                                                                                        }
                                                                 )
-                                                        searchShortcuts.add(shortcut)
+                                                        newShortcuts.add(shortcut)
                                                         shortcutsCount++
                                                 }
                                         }
-
-                                        // Merge with existing Action shortcuts (preserve
-                                        // programmatically generated ones)
-                                        val existingActions =
-                                                customShortcutRepository.items.value
-                                                        .filterIsInstance<CustomShortcut.Action>()
-                                        val allShortcuts = searchShortcuts + existingActions
-                                        customShortcutRepository.replaceAll(allShortcuts)
+                                        searchShortcutRepository.replaceAll(newShortcuts)
                                 }
 
                                 // Import Favorites
