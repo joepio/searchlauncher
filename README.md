@@ -45,83 +45,31 @@ If you want
 
 ### Prerequisites
 
-- Android Studio Hedgehog (2023.1.1) or newer
 - JDK 17 or newer
 - Android SDK with API 34
 
 ### Build Instructions
 
-1. Clone the repository:
 ```bash
 git clone https://github.com/joepio/searchlauncher.git
 cd searchlauncher
-```
-
-2. Open the project:
-   - **VSCode**: Just open the folder (`code .`)
-   - **Android Studio**: Use "Open" and select the folder
-
-3. Install on device:
-```bash
+# Install to connected device over ADB
 ./gradlew installDebug
-```
-
-**Note**: You can edit and build in VSCode, but Android Studio provides better Android-specific tooling (layout preview, APK analyzer, etc.).
-
-## Usage
-
-1. **First Launch**: The app will guide you through the onboarding process
-2. **Grant Permissions**: All are optional.
-3. **Start Service**: The overlay service will start automatically after onboarding
-4. **Use Gesture**: Swipe from the edge of the screen and back to open search
-5. **Search**: Type to search apps and content, tap to launch
-
-## How It Works
-
-1. **Overlay Service** runs in the background with a foreground notification
-2. **Edge Detector** listens for swipe gestures at the screen edge
-3. **Search Window** appears as an overlay when gesture is detected
-4. **Search Repository** queries installed apps and AppSearch database
-5. **Results** are displayed in real-time as you type
-
-## Permissions Explained
-
-- **Display Over Other Apps**: Allows the search bar to appear over other apps
-- **Accessibility Service**: Enables detection of swipe gestures system-wide
-- **Usage Stats**: Helps sort apps by most recently used (optional)
-
-## Project Structure
-
-```
-app/src/main/java/com/searchlauncher/app/
-├── SearchLauncherApp.kt           # Application class
-├── data/
-│   ├── AppInfo.kt                  # Data model for apps
-│   ├── SearchResult.kt             # Search result sealed class
-│   └── SearchRepository.kt         # Search logic and app queries
-├── service/
-│   ├── OverlayService.kt           # Background service for overlay
-│   ├── GestureAccessibilityService.kt  # Accessibility service
-│   └── SearchWindowManager.kt      # Manages search overlay window
-└── ui/
-    ├── MainActivity.kt             # Main activity and home screen
-    ├── OnboardingScreen.kt         # Permission onboarding flow
-    └── theme/
-        ├── Theme.kt                # Material 3 theme
-        └── Type.kt                 # Typography definitions
+# Run tests
+./gradlew test
+# Build APK
+./gradlew assembleRelease
+# Sign APK
+./gradlew signRelease
+# Install signed APK
+./gradlew installRelease
 ```
 
 ## Known Limitations
 
 - Content search within apps requires apps to implement AppSearch indexing
-- Gesture detection may conflict with other gesture-based apps
+- Gesture detection may conflict with other gesture-based apps (e.g. Samsung's One UI)
 - Some manufacturers' custom Android builds may restrict overlay permissions
-
-## Future Enhancements
-
-- Contact search
-- Search history
-- Favorites/pinned apps
 
 ## Contributing
 

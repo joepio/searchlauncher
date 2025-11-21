@@ -20,7 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -58,6 +58,17 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "se
 
 class MainActivity : ComponentActivity() {
 
+    private val exportBackupLauncher =
+            registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {
+                    uri ->
+                uri?.let { lifecycleScope.launch { performExport(it) } }
+            }
+
+    private val importBackupLauncher =
+            registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                uri?.let { lifecycleScope.launch { performImport(it) } }
+            }
+
     private var queryState by mutableStateOf("")
     private var currentScreenState by mutableStateOf(Screen.Search)
     private var focusTrigger by mutableStateOf(0L)
@@ -66,26 +77,6 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIntent(intent)
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(
-            requestCode: Int,
-            resultCode: Int,
-            data: android.content.Intent?
-    ) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode == RESULT_OK && data != null) {
-            val uri = data.data
-            if (uri != null) {
-                lifecycleScope.launch {
-                    when (requestCode) {
-                        EXPORT_BACKUP_REQUEST -> performExport(uri)
-                        IMPORT_BACKUP_REQUEST -> performImport(uri)
-                    }
-                }
-            }
-        }
     }
 
     private fun handleIntent(intent: Intent) {
@@ -100,6 +91,19 @@ class MainActivity : ComponentActivity() {
             currentScreenState = Screen.Search
             focusTrigger = System.currentTimeMillis()
         }
+    }
+
+    fun exportBackup() {
+        val timestamp =
+                java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
+                        .format(java.util.Date())
+        val fileName = "searchlauncher_backup_$timestamp.searchlauncher"
+
+        exportBackupLauncher.launch(fileName)
+    }
+
+    fun importBackup() {
+        importBackupLauncher.launch(arrayOf("*/*"))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -314,10 +318,7 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.ArrowBack,
-                        contentDescription = "Back"
-                )
+                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(text = "SearchLauncher", style = MaterialTheme.typography.headlineLarge)
@@ -682,6 +683,7 @@ fun hasUsageStatsPermission(context: Context): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val mode =
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    @Suppress("DEPRECATION")
                     appOps.unsafeCheckOpNoThrow(
                             AppOpsManager.OPSTR_GET_USAGE_STATS,
                             android.os.Process.myUid(),
@@ -983,7 +985,7 @@ private fun ThemeSettingsCard(onNavigateToHome: () -> Unit) {
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Divider()
+            HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
@@ -1005,7 +1007,7 @@ private fun ThemeSettingsCard(onNavigateToHome: () -> Unit) {
             )
 
             Spacer(modifier = Modifier.height(16.dp))
-            Divider()
+            HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
@@ -1013,37 +1015,25 @@ private fun ThemeSettingsCard(onNavigateToHome: () -> Unit) {
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
             )
-            Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                val modes = listOf("System", "Light", "Dark")
+            val modes = listOf("System", "Light", "Dark")
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 modes.forEachIndexed { index, mode ->
-                    OutlinedButton(
+                    SegmentedButton(
+                            shape = SegmentedButtonDefaults.itemShape(index, modes.lastIndex),
+                            selected = darkMode == index,
                             onClick = {
                                 scope.launch {
                                     context.dataStore.edit { preferences ->
                                         preferences[MainActivity.PreferencesKeys.DARK_MODE] = index
                                     }
                                 }
-                            },
-                            colors =
-                                    if (darkMode == index)
-                                            ButtonDefaults.outlinedButtonColors(
-                                                    containerColor =
-                                                            MaterialTheme.colorScheme
-                                                                    .primaryContainer,
-                                                    contentColor =
-                                                            MaterialTheme.colorScheme
-                                                                    .onPrimaryContainer
-                                            )
-                                    else ButtonDefaults.outlinedButtonColors()
+                            }
                     ) { Text(mode) }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Divider()
+            HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
@@ -1129,33 +1119,6 @@ private fun BackupRestoreCard() {
             }
         }
     }
-}
-
-private const val EXPORT_BACKUP_REQUEST = 1001
-private const val IMPORT_BACKUP_REQUEST = 1002
-
-private fun MainActivity.exportBackup() {
-    val timestamp =
-            java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
-                    .format(java.util.Date())
-    val fileName = "searchlauncher_backup_$timestamp.searchlauncher"
-
-    val intent =
-            android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
-                addCategory(android.content.Intent.CATEGORY_OPENABLE)
-                type = "application/json"
-                putExtra(android.content.Intent.EXTRA_TITLE, fileName)
-            }
-    @Suppress("DEPRECATION") startActivityForResult(intent, EXPORT_BACKUP_REQUEST)
-}
-
-private fun MainActivity.importBackup() {
-    val intent =
-            android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(android.content.Intent.CATEGORY_OPENABLE)
-                type = "*/*"
-            }
-    @Suppress("DEPRECATION") startActivityForResult(intent, IMPORT_BACKUP_REQUEST)
 }
 
 private suspend fun MainActivity.performExport(uri: android.net.Uri) {
