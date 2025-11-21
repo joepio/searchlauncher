@@ -26,6 +26,7 @@ class OverlayService : Service() {
     private var initialX = 0f
     private var initialY = 0f
     private var hasMovedBack = false
+    private var isTapCandidate = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(SearchLauncherApp.NOTIFICATION_ID, createNotification())
@@ -54,10 +55,11 @@ class OverlayService : Service() {
 
     private fun createEdgeView(gravity: Int): View {
         val view = View(this)
+        val width = (20 * resources.displayMetrics.density).toInt()
 
         val params =
                 WindowManager.LayoutParams(
-                                60, // Width - increased to 60px for better detection
+                                width,
                                 WindowManager.LayoutParams.MATCH_PARENT,
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -90,8 +92,15 @@ class OverlayService : Service() {
                 initialX = event.rawX
                 initialY = event.rawY
                 hasMovedBack = false
+                isTapCandidate = true
             }
             MotionEvent.ACTION_MOVE -> {
+                val dx = kotlin.math.abs(event.rawX - initialX)
+                val dy = kotlin.math.abs(event.rawY - initialY)
+                if (isTapCandidate && (dx > TAP_THRESHOLD_PX || dy > TAP_THRESHOLD_PX)) {
+                    isTapCandidate = false
+                }
+
                 val rawDelta = event.rawX - initialX
                 // Normalize delta: Positive means moving "in" (away from edge)
                 // For Left edge: +x is in
@@ -101,19 +110,75 @@ class OverlayService : Service() {
                 // 1. Swipe IN (away from edge)
                 if (!hasMovedBack && deltaIn > SWIPE_THRESHOLD) {
                     hasMovedBack = true
+                    isTapCandidate = false
                 }
                 // 2. Swipe OUT (back to edge)
                 else if (hasMovedBack && deltaIn < SWIPE_THRESHOLD / 2) {
                     // User moved back to starting position
                     launchSearchActivity()
                     hasMovedBack = false
+                    isTapCandidate = false
                 }
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+            MotionEvent.ACTION_UP -> {
+                if (isTapCandidate) {
+                    handleTap(event.rawX, event.rawY)
+                }
                 hasMovedBack = false
+                isTapCandidate = false
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                hasMovedBack = false
+                isTapCandidate = false
             }
         }
         return true
+    }
+
+    private fun handleTap(x: Float, y: Float) {
+        if (!GestureAccessibilityService.isConnected()) {
+            // If Accessibility Service is not enabled, we can't pass the click through.
+            // We could show a Toast here, but it might be annoying if accidental.
+            return
+        }
+
+        // 1. Make the overlay "untouchable" so the injected click goes through it
+        setUntouchable(true)
+
+        // 2. Inject the click via Accessibility Service
+        val success =
+                GestureAccessibilityService.performClick(x, y) {
+                    // 3. When gesture completes (plus small buffer), make overlay touchable again
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        setUntouchable(false)
+                    }, 100)
+                }
+
+        if (!success) {
+            // If dispatch failed immediately, restore touchability
+            setUntouchable(false)
+        }
+    }
+
+    private fun setUntouchable(untouchable: Boolean) {
+        leftEdgeView?.let { updateViewFlags(it, untouchable) }
+        rightEdgeView?.let { updateViewFlags(it, untouchable) }
+    }
+
+    private fun updateViewFlags(view: View, untouchable: Boolean) {
+        val params = view.layoutParams as WindowManager.LayoutParams
+        val currentFlags = params.flags
+
+        val newFlags = if (untouchable) {
+            currentFlags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        } else {
+            currentFlags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        }
+
+        if (currentFlags != newFlags) {
+            params.flags = newFlags
+            windowManager.updateViewLayout(view, params)
+        }
     }
 
     private fun createNotification(): Notification {
@@ -158,5 +223,6 @@ class OverlayService : Service() {
         const val ACTION_SHOW_SEARCH = "com.searchlauncher.SHOW_SEARCH"
         const val ACTION_HIDE_SEARCH = "com.searchlauncher.HIDE_SEARCH"
         private const val SWIPE_THRESHOLD = 100f
+        private const val TAP_THRESHOLD_PX = 20f
     }
 }

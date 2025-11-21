@@ -2,8 +2,11 @@ package com.searchlauncher.app.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.graphics.Path
 import android.view.accessibility.AccessibilityEvent
+import java.lang.ref.WeakReference
 
 class GestureAccessibilityService : AccessibilityService() {
 
@@ -12,6 +15,7 @@ class GestureAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = WeakReference(this)
 
         val info = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or
@@ -21,6 +25,11 @@ class GestureAccessibilityService : AccessibilityService() {
             notificationTimeout = 100
         }
         serviceInfo = info
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        instance = null
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -37,5 +46,33 @@ class GestureAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val DOUBLE_BACK_TIME_DELTA = 500L // milliseconds
+        private var instance: WeakReference<GestureAccessibilityService>? = null
+
+        fun isConnected(): Boolean = instance?.get() != null
+
+        fun performClick(x: Float, y: Float, onComplete: () -> Unit): Boolean {
+            val service = instance?.get() ?: return false
+
+            val path = Path()
+            path.moveTo(x, y)
+
+            // Create a tap gesture (short duration stroke)
+            val builder = GestureDescription.Builder()
+            val gestureDescription = builder
+                .addStroke(GestureDescription.StrokeDescription(path, 0, 50))
+                .build()
+
+            return service.dispatchGesture(gestureDescription, object : AccessibilityService.GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    super.onCompleted(gestureDescription)
+                    onComplete()
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    super.onCancelled(gestureDescription)
+                    onComplete()
+                }
+            }, null)
+        }
     }
 }
