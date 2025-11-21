@@ -59,70 +59,121 @@ fun ThemeSettingsCard(onNavigateToHome: () -> Unit) {
  val backgroundUriString by
          context.dataStore
                  .data
-                 .map { it[MainActivity.PreferencesKeys.BACKGROUND_URI] }
-                 .collectAsState(initial = null)
+                .map { it[MainActivity.PreferencesKeys.BACKGROUND_URI] }
+                .collectAsState(initial = null)
+    val backgroundFolderUriString by
+            context.dataStore
+                    .data
+                    .map { it[MainActivity.PreferencesKeys.BACKGROUND_FOLDER_URI] }
+                    .collectAsState(initial = null)
 
- var showColorPickerDialog by remember { mutableStateOf(false) }
+    var showColorPickerDialog by remember { mutableStateOf(false) }
  var showImageColorPickerDialog by remember { mutableStateOf(false) }
 
- val launcher =
-         rememberLauncherForActivityResult(
-                 contract = ActivityResultContracts.OpenDocument(),
-                 onResult = { uri: Uri? ->
-                  uri?.let {
-                   val flag = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                   context.contentResolver.takePersistableUriPermission(it, flag)
-                   scope.launch {
-                    context.dataStore.edit { preferences ->
-                     preferences[MainActivity.PreferencesKeys.BACKGROUND_URI] = it.toString()
+    val launcher =
+            rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenDocument(),
+                    onResult = { uri: Uri? ->
+                        uri?.let {
+                            val flag = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            context.contentResolver.takePersistableUriPermission(it, flag)
+                            scope.launch {
+                                context.dataStore.edit { preferences ->
+                                    preferences[MainActivity.PreferencesKeys.BACKGROUND_URI] =
+                                            it.toString()
+                                    preferences.remove(MainActivity.PreferencesKeys.BACKGROUND_FOLDER_URI)
+                                }
+                                // Navigate after save completes
+                                withContext(Dispatchers.Main) { onNavigateToHome() }
+                            }
+                        }
                     }
-                    // Navigate after save completes
-                    withContext(Dispatchers.Main) { onNavigateToHome() }
-                   }
-                  }
-                 }
-         )
+            )
 
- Card(modifier = Modifier.fillMaxWidth()) {
-  Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-   // Background Image section (moved to top)
-   Text(
-           text = "Background Image",
-           style = MaterialTheme.typography.titleMedium,
-           modifier = Modifier.fillMaxWidth()
-   )
-   Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-    OutlinedButton(
-            onClick = { launcher.launch(arrayOf("image/*")) },
-            modifier = Modifier.weight(1f)
-    ) { Text("Pick Image") }
-    if (backgroundUriString != null) {
-     OutlinedButton(
-             onClick = {
-              scope.launch {
-               context.dataStore.edit { preferences ->
-                preferences.remove(MainActivity.PreferencesKeys.BACKGROUND_URI)
-               }
-               // Navigate after clear completes
-               withContext(Dispatchers.Main) { onNavigateToHome() }
-              }
-             },
-             modifier = Modifier.weight(1f)
-     ) { Text("Clear Image") }
-    }
-   }
+    val folderLauncher =
+            rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenDocumentTree(),
+                    onResult = { uri: Uri? ->
+                        uri?.let {
+                            val flag = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            context.contentResolver.takePersistableUriPermission(it, flag)
+                            scope.launch {
+                                context.dataStore.edit { preferences ->
+                                    preferences[MainActivity.PreferencesKeys.BACKGROUND_FOLDER_URI] =
+                                            it.toString()
+                                    preferences.remove(MainActivity.PreferencesKeys.BACKGROUND_URI)
+                                }
+                                // Navigate after save completes
+                                withContext(Dispatchers.Main) { onNavigateToHome() }
+                            }
+                        }
+                    }
+            )
 
-   // Preview of selected image
-   if (backgroundUriString != null) {
-    AsyncImage(
-            model = android.net.Uri.parse(backgroundUriString),
-            contentDescription = "Background preview",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().height(120.dp).clip(MaterialTheme.shapes.medium)
-    )
-   }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Background Image section (moved to top)
+            Text(
+                    text = "Background Image",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.fillMaxWidth()
+            )
+            Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                        onClick = { launcher.launch(arrayOf("image/*")) },
+                        modifier = Modifier.weight(1f)
+                ) { Text("Pick Image") }
+                OutlinedButton(
+                        onClick = { folderLauncher.launch(null) },
+                        modifier = Modifier.weight(1f)
+                ) { Text("Pick Folder") }
+            }
 
-   HorizontalDivider()
+            if (backgroundUriString != null || backgroundFolderUriString != null) {
+                OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                context.dataStore.edit { preferences ->
+                                    preferences.remove(MainActivity.PreferencesKeys.BACKGROUND_URI)
+                                    preferences.remove(
+                                            MainActivity.PreferencesKeys.BACKGROUND_FOLDER_URI
+                                    )
+                                }
+                                // Navigate after clear completes
+                                withContext(Dispatchers.Main) { onNavigateToHome() }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                ) { Text("Clear Background") }
+            }
+
+            // Preview of selected image
+            if (backgroundUriString != null) {
+                AsyncImage(
+                        model = android.net.Uri.parse(backgroundUriString),
+                        contentDescription = "Background preview",
+                        contentScale = ContentScale.Crop,
+                        modifier =
+                                Modifier.fillMaxWidth()
+                                        .height(120.dp)
+                                        .clip(MaterialTheme.shapes.medium)
+                )
+            }
+            if (backgroundFolderUriString != null) {
+                Text(
+                        text = "Folder selected. Images will rotate.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            HorizontalDivider()
 
    // Theme Color section
    Text(

@@ -49,6 +49,7 @@ import com.searchlauncher.app.data.SearchResult
 import com.searchlauncher.app.ui.components.FavoritesRow
 import com.searchlauncher.app.ui.components.QuickCopyDialog
 import com.searchlauncher.app.ui.components.SearchResultItem
+import com.searchlauncher.app.ui.components.WallpaperBackground
 import com.searchlauncher.app.ui.theme.SearchLauncherTheme
 import com.searchlauncher.app.util.CustomActionHandler
 import kotlinx.coroutines.Dispatchers
@@ -65,7 +66,9 @@ fun SearchScreen(
         searchRepository: SearchRepository,
         focusTrigger: Long = 0L,
         showHistory: Boolean = true,
-        showBackgroundImage: Boolean = false
+        showBackgroundImage: Boolean = false,
+        folderImages: List<Uri> = emptyList(),
+        lastImageUriString: String? = null
 ) {
     var searchResults by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
@@ -151,15 +154,6 @@ fun SearchScreen(
                     .map { it[MainActivity.PreferencesKeys.DARK_MODE] ?: 0 }
                     .collectAsState(initial = 0)
 
-    val backgroundUriString by
-            context.dataStore
-                    .data
-                    .map {
-                        if (showBackgroundImage) it[MainActivity.PreferencesKeys.BACKGROUND_URI]
-                        else null
-                    }
-                    .collectAsState(initial = null)
-
     // Remember the max height of the IME observed so far
     var maxImeHeight by remember { mutableStateOf(0) }
     val imeHeight = WindowInsets.ime.getBottom(LocalDensity.current)
@@ -203,74 +197,14 @@ fun SearchScreen(
             darkThemeMode = darkMode,
             chroma = themeSaturation
     ) {
-        Box(modifier = Modifier.fillMaxSize().clickable { onDismiss() }) {
-            // Background: either image or solid color
-            // Modified to only fill the space ABOVE the keyboard
-            // Use the FULL available size for the background, not padded by bottomPadding
-            // This ensures the background extends behind the keyboard area if needed,
-            // or at least covers the "gap" if there is a mismatch.
-            // But user asked: "bg to fit the space above the keyboard"
-
-            // Re-evaluating the screenshot:
-            // The user is seeing a big black void where the keyboard is supposed to be.
-            // The "Background fitting space above keyboard" logic is doing exactly that:
-            // it stops drawing the background at 'bottomPadding'.
-
-            // If the keyboard is NOT actually visible or has a different height than stored,
-            // we get a black bar.
-            // The black bar is the window background because our Surface/Box doesn't cover it.
-
-            // To fix the "black void" issue while keeping "bg fits space above keyboard":
-            // 1. We should probably draw a solid color background (window background) behind
-            // everything
-            //    to ensure no transparency leaks to system black.
-            // 2. OR, better yet: The user's request "bg to fit space above keyboard"
-            //    probably meant the BACKGROUND IMAGE should be cropped/positioned there,
-            //    but the app background color should likely extend or be handled gracefully.
-
-            // Given the screenshot showing a black bottom half, it seems the 'bottomPadding'
-            // is reserving space but nothing is drawing there.
-
-            // Let's make the root Box fill the entire screen including behind nav bar/ime
-            // and only pad the *content* (Columns).
-            // BUT for the background IMAGE, we apply the padding so it doesn't get covered.
-
-            // If no image is set (solid color), we probably want that solid color to fill the whole
-            // screen
-            // or at least not leave a black void.
-
-            // Strategy:
-            // 1. Root Box fills max size.
-            // 2. If Background Image -> Apply bottom padding to it so it squats above keyboard.
-            //    Underneath (behind) it, draw a solid surface color so no black void if gaps.
-            // 3. If Solid Color -> Fill max size (behind keyboard too) so it looks seamless?
-            //    OR if user strictly wants it to stop above keyboard, we must ensure what's behind
-            // is acceptable.
-
-            // Current implementation:
-            // val contentModifier = Modifier.fillMaxSize().padding(bottom = bottomPadding)
-            // This is leaving the bottom area transparent -> Activity window background (Black).
-
-            // For overlay mode, we want transparency, so don't draw an opaque base background
-
-            val contentModifier = Modifier.fillMaxSize().padding(bottom = bottomPadding)
-
-            if (backgroundUriString != null) {
-                AsyncImage(
-                        model = android.net.Uri.parse(backgroundUriString),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = contentModifier
-                )
-            } else {
-                // Solid background when no image - semi-transparent so app underneath shows through
-                Box(
-                        modifier =
-                                contentModifier.background(
-                                        MaterialTheme.colorScheme.background.copy(alpha = 0.7f)
-                                )
-                )
-            }
+        Box(modifier = Modifier.fillMaxSize()) {
+            WallpaperBackground(
+                    showBackgroundImage = showBackgroundImage,
+                    bottomPadding = bottomPadding,
+                    onDismiss = onDismiss,
+                    folderImages = folderImages,
+                    lastImageUriString = lastImageUriString
+            )
 
             Column(
                     modifier =

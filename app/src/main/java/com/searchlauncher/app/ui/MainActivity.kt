@@ -152,6 +152,47 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         var showPractice by remember { mutableStateOf(false) }
 
+        // Hoist wallpaper state
+        val backgroundFolderUriString by
+                context.dataStore
+                        .data
+                        .map { it[PreferencesKeys.BACKGROUND_FOLDER_URI] }
+                        .collectAsState(initial = null)
+        var folderImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
+
+        LaunchedEffect(backgroundFolderUriString) {
+            if (backgroundFolderUriString != null) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        val folderUri = Uri.parse(backgroundFolderUriString)
+                        val documentFile =
+                                androidx.documentfile.provider.DocumentFile.fromTreeUri(
+                                        context,
+                                        folderUri
+                                )
+                        val files = documentFile?.listFiles()
+                        val images =
+                                files?.filter { file ->
+                                    val mimeType = file.type
+                                    mimeType != null && mimeType.startsWith("image/")
+                                }
+                        val uris = images?.sortedBy { it.name }?.map { it.uri } ?: emptyList()
+                        withContext(Dispatchers.Main) { folderImages = uris }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            } else {
+                folderImages = emptyList()
+            }
+        }
+
+        val lastImageUriString by
+                context.dataStore
+                        .data
+                        .map { it[PreferencesKeys.BACKGROUND_LAST_IMAGE_URI] }
+                        .collectAsState(initial = null)
+
         val onboardingComplete =
                 context.dataStore
                         .data
@@ -208,7 +249,9 @@ class MainActivity : ComponentActivity() {
                                 searchRepository = app.searchRepository,
                                 focusTrigger = focusTrigger,
                                 showHistory = showHistory.value,
-                                showBackgroundImage = true
+                                showBackgroundImage = true,
+                                folderImages = folderImages,
+                                lastImageUriString = lastImageUriString
                         )
                     }
                     Screen.Settings -> {
@@ -257,6 +300,10 @@ class MainActivity : ComponentActivity() {
                 androidx.datastore.preferences.core.stringPreferencesKey(
                         "background_uri"
                 ) // 0: System, 1: Light, 2: Dark
+        val BACKGROUND_FOLDER_URI =
+                androidx.datastore.preferences.core.stringPreferencesKey("background_folder_uri")
+        val BACKGROUND_LAST_IMAGE_URI =
+                androidx.datastore.preferences.core.stringPreferencesKey("background_last_image_uri")
     }
 }
 
