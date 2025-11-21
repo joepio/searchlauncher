@@ -114,7 +114,8 @@ class MainActivity : ComponentActivity() {
 
     private enum class Screen {
         Search,
-        Settings
+        Settings,
+        CustomShortcuts
     }
 
     @Composable
@@ -136,8 +137,12 @@ class MainActivity : ComponentActivity() {
                         .collectAsState(initial = true)
 
         // Handle back press
-        BackHandler(enabled = currentScreenState == Screen.Settings) {
-            currentScreenState = Screen.Search
+        BackHandler(enabled = currentScreenState != Screen.Search) {
+            if (currentScreenState == Screen.CustomShortcuts) {
+                currentScreenState = Screen.Settings
+            } else {
+                currentScreenState = Screen.Search
+            }
         }
 
         if (showPractice) {
@@ -183,8 +188,14 @@ class MainActivity : ComponentActivity() {
                                 onStartService = { startOverlayService() },
                                 onStopService = { stopOverlayService() },
                                 onOpenPractice = { showPractice = true },
+                                onOpenCustomShortcuts = {
+                                    currentScreenState = Screen.CustomShortcuts
+                                },
                                 onBack = { currentScreenState = Screen.Search }
                         )
+                    }
+                    Screen.CustomShortcuts -> {
+                        CustomShortcutsScreen(onBack = { currentScreenState = Screen.Settings })
                     }
                 }
             }
@@ -226,6 +237,7 @@ fun HomeScreen(
         onStartService: () -> Unit,
         onStopService: () -> Unit,
         onOpenPractice: () -> Unit,
+        onOpenCustomShortcuts: () -> Unit,
         onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -384,6 +396,23 @@ fun HomeScreen(
                                 }
                             }
                     )
+                }
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(text = "Custom Shortcuts", style = MaterialTheme.typography.titleMedium)
+                Text(
+                        text = "Manage your custom search shortcuts (e.g., 'r' for Reddit)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(onClick = onOpenCustomShortcuts, modifier = Modifier.fillMaxWidth()) {
+                    Text("Manage Shortcuts")
                 }
             }
         }

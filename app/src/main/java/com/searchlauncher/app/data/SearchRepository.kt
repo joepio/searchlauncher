@@ -67,6 +67,11 @@ class SearchRepository(private val context: Context) {
                 withContext(Dispatchers.IO) {
                         val session = appSearchSession ?: return@withContext
 
+                        val app =
+                                context.applicationContext as? SearchLauncherApp
+                                        ?: return@withContext
+                        val shortcuts = app.customShortcutRepository.items.value
+
                         data class ShortcutInfo(
                                 val idSuffix: String,
                                 val docDescription: String?,
@@ -74,8 +79,8 @@ class SearchRepository(private val context: Context) {
                                 val isAction: Boolean
                         )
 
-                        val shortcuts =
-                                CustomShortcuts.shortcuts.map { shortcut ->
+                        val shortcutDocs =
+                                shortcuts.map { shortcut ->
                                         val info =
                                                 when (shortcut) {
                                                         is CustomShortcut.Search -> {
@@ -117,13 +122,13 @@ class SearchRepository(private val context: Context) {
                                         )
                                 }
 
-                        if (shortcuts.isNotEmpty()) {
+                        if (shortcutDocs.isNotEmpty()) {
                                 val putRequest =
                                         PutDocumentsRequest.Builder()
-                                                .addDocuments(shortcuts)
+                                                .addDocuments(shortcutDocs)
                                                 .build()
                                 session.putAsync(putRequest).get()
-                                documentCache.addAll(shortcuts)
+                                documentCache.addAll(shortcutDocs)
                         }
                 }
 
@@ -646,8 +651,10 @@ class SearchRepository(private val context: Context) {
 
                 val trigger = parts[0]
                 val searchTerm = parts[1]
+                val app = context.applicationContext as? SearchLauncherApp ?: return emptyList()
+                val shortcuts = app.customShortcutRepository.items.value
                 val shortcut =
-                        CustomShortcuts.shortcuts.filterIsInstance<CustomShortcut.Search>().find {
+                        shortcuts.filterIsInstance<CustomShortcut.Search>().find {
                                 it.trigger.equals(trigger, ignoreCase = true)
                         }
                                 ?: return emptyList()
