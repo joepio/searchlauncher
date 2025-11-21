@@ -1,17 +1,19 @@
 package com.searchlauncher.app.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.searchlauncher.app.SearchLauncherApp
@@ -70,37 +72,101 @@ fun CustomShortcutsScreen(onBack: () -> Unit) {
                         modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                        items(shortcuts) { shortcut ->
-                                ShortcutItem(
-                                        shortcut = shortcut,
-                                        onEdit = {
-                                                editingShortcut = shortcut
-                                                showDialog = true
-                                        },
-                                        onDelete = {
-                                                deletedShortcut = shortcut
-                                                scope.launch {
-                                                        app.searchShortcutRepository.removeShortcut(
-                                                                shortcut.id
-                                                        )
-                                                        val result =
-                                                                snackbarHostState.showSnackbar(
-                                                                        message =
-                                                                                "Shortcut deleted",
-                                                                        actionLabel = "Undo",
-                                                                        duration =
-                                                                                SnackbarDuration
-                                                                                        .Short
-                                                                )
-                                                        if (result == SnackbarResult.ActionPerformed
+                        itemsIndexed(items = shortcuts, key = { _, item -> item.id }) {
+                                index,
+                                shortcut ->
+                                val dismissState =
+                                        rememberSwipeToDismissBoxState(
+                                                confirmValueChange = {
+                                                        if (it == SwipeToDismissBoxValue.EndToStart
                                                         ) {
-                                                                deletedShortcut?.let {
+                                                                val indexToRestore =
+                                                                        index // Capture index
+                                                                // locally
+                                                                deletedShortcut = shortcut
+                                                                scope.launch {
                                                                         app.searchShortcutRepository
-                                                                                .addShortcut(it)
+                                                                                .removeShortcut(
+                                                                                        shortcut.id
+                                                                                )
+                                                                        val result =
+                                                                                snackbarHostState
+                                                                                        .showSnackbar(
+                                                                                                message =
+                                                                                                        "Shortcut deleted",
+                                                                                                actionLabel =
+                                                                                                        "Undo",
+                                                                                                duration =
+                                                                                                        SnackbarDuration
+                                                                                                                .Short
+                                                                                        )
+                                                                        if (result ==
+                                                                                        SnackbarResult
+                                                                                                .ActionPerformed
+                                                                        ) {
+                                                                                deletedShortcut
+                                                                                        ?.let { item
+                                                                                                ->
+                                                                                                app.searchShortcutRepository
+                                                                                                        .addShortcutAt(
+                                                                                                                indexToRestore,
+                                                                                                                item
+                                                                                                        )
+                                                                                        }
+                                                                        }
+                                                                        deletedShortcut = null
                                                                 }
+                                                                true
+                                                        } else {
+                                                                false
                                                         }
-                                                        deletedShortcut = null
                                                 }
+                                        )
+
+                                LaunchedEffect(Unit) {
+                                        dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+                                }
+
+                                SwipeToDismissBox(
+                                        state = dismissState,
+                                        backgroundContent = {
+                                                val color =
+                                                        if (dismissState.dismissDirection ==
+                                                                        SwipeToDismissBoxValue
+                                                                                .EndToStart
+                                                        ) {
+                                                                MaterialTheme.colorScheme
+                                                                        .errorContainer
+                                                        } else {
+                                                                Color.Transparent
+                                                        }
+
+                                                Box(
+                                                        modifier =
+                                                                Modifier.fillMaxSize()
+                                                                        .background(color)
+                                                                        .padding(
+                                                                                horizontal = 20.dp
+                                                                        ),
+                                                        contentAlignment = Alignment.CenterEnd
+                                                ) {
+                                                        Icon(
+                                                                Icons.Default.Delete,
+                                                                contentDescription = "Delete",
+                                                                tint =
+                                                                        MaterialTheme.colorScheme
+                                                                                .onErrorContainer
+                                                        )
+                                                }
+                                        },
+                                        content = {
+                                                ShortcutItem(
+                                                        shortcut = shortcut,
+                                                        onClick = {
+                                                                editingShortcut = shortcut
+                                                                showDialog = true
+                                                        }
+                                                )
                                         }
                                 )
                         }
@@ -114,7 +180,6 @@ fun CustomShortcutsScreen(onBack: () -> Unit) {
                         onSave = { newShortcut ->
                                 scope.launch {
                                         if (editingShortcut != null) {
-                                                // Update existing shortcut
                                                 app.searchShortcutRepository.updateAlias(
                                                         newShortcut.id,
                                                         newShortcut.alias
@@ -125,7 +190,6 @@ fun CustomShortcutsScreen(onBack: () -> Unit) {
                                                 )
                                         }
                                         showDialog = false
-                                        // Re-index shortcuts after changes
                                         app.searchRepository.indexCustomShortcuts()
                                 }
                         }
@@ -134,51 +198,33 @@ fun CustomShortcutsScreen(onBack: () -> Unit) {
 }
 
 @Composable
-fun ShortcutItem(shortcut: SearchShortcut, onEdit: () -> Unit, onDelete: () -> Unit) {
+fun ShortcutItem(shortcut: SearchShortcut, onClick: () -> Unit) {
         Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
                 colors =
                         CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
         ) {
-                Row(
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                        text = shortcut.description,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                )
-                                Text(
-                                        text = "Alias: ${shortcut.alias}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                        text = shortcut.urlTemplate,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color =
-                                                MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                                        alpha = 0.7f
-                                                )
-                                )
-                        }
-                        Row {
-                                IconButton(onClick = onEdit) {
-                                        Icon(Icons.Default.Edit, contentDescription = "Edit")
-                                }
-                                IconButton(onClick = onDelete) {
-                                        Icon(
-                                                Icons.Default.Close,
-                                                contentDescription = "Delete",
-                                                tint = MaterialTheme.colorScheme.error
+                Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                                text = shortcut.description,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                        Text(
+                                text = "Alias: ${shortcut.alias}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                                text = shortcut.urlTemplate,
+                                style = MaterialTheme.typography.bodySmall,
+                                color =
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                                alpha = 0.7f
                                         )
-                                }
-                        }
+                        )
                 }
         }
 }
@@ -205,7 +251,6 @@ fun ShortcutDialog(
                 text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (shortcut != null) {
-                                        // Editing: only allow changing the alias
                                         Text(
                                                 text =
                                                         "Edit the alias/trigger for this search shortcut",
@@ -220,7 +265,6 @@ fun ShortcutDialog(
                                                 singleLine = true
                                         )
                                 } else {
-                                        // New shortcut: allow all fields
                                         OutlinedTextField(
                                                 value = description,
                                                 onValueChange = { description = it },

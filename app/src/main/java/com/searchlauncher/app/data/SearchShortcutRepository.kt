@@ -75,6 +75,17 @@ class SearchShortcutRepository(context: Context) {
           saveItems(currentItems)
          }
 
+ suspend fun addShortcutAt(index: Int, shortcut: SearchShortcut) =
+         withContext(Dispatchers.IO) {
+          val currentItems = _items.value.toMutableList()
+          if (index in 0..currentItems.size) {
+           currentItems.add(index, shortcut)
+          } else {
+           currentItems.add(shortcut)
+          }
+          saveItems(currentItems)
+         }
+
  suspend fun removeShortcut(shortcutId: String) =
          withContext(Dispatchers.IO) {
           val currentItems = _items.value.toMutableList()
@@ -103,4 +114,3 @@ class SearchShortcutRepository(context: Context) {
   saveItems(shortcuts)
  }
 }
-
