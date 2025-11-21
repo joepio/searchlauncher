@@ -28,6 +28,22 @@ class SearchRepository(private val context: Context) {
         private val smartActionManager = SmartActionManager(context)
         private val iconGenerator = SearchIconGenerator(context)
 
+        // LRU cache for single-letter search queries
+        private val searchCache =
+                Collections.synchronizedMap(
+                        object : LinkedHashMap<String, List<SearchResult>>(16, 0.75f, true) {
+                                override fun removeEldestEntry(
+                                        eldest: MutableMap.MutableEntry<String, List<SearchResult>>?
+                                ): Boolean {
+                                        return size > CACHE_SIZE
+                                }
+                        }
+                )
+        private val CACHE_SIZE = 50
+        private val SINGLE_LETTER_PATTERN = Regex("^[a-zA-Z0-9]$")
+        private var lastUsageReportTime = 0L
+        private val CACHE_COOLDOWN_MS = 500L // Wait 500ms after usage report before caching again
+
         // Tracks whether the search index has been fully initialized.
         // This is used to prevent the UI from querying the index before it's ready,
         // which was causing favorites to not load on fresh installs.
@@ -65,6 +81,7 @@ class SearchRepository(private val context: Context) {
 
         suspend fun indexCustomShortcuts() =
                 withContext(Dispatchers.IO) {
+                        searchCache.clear() // Invalidate cache
                         val session = appSearchSession ?: return@withContext
 
                         val app =
@@ -125,6 +142,7 @@ class SearchRepository(private val context: Context) {
 
         suspend fun indexStaticShortcuts() =
                 withContext(Dispatchers.IO) {
+                        searchCache.clear() // Invalidate cache
                         val session = appSearchSession ?: return@withContext
                         val shortcuts = StaticShortcutScanner.scan(context)
                         val docs =
@@ -329,7 +347,12 @@ class SearchRepository(private val context: Context) {
                         }
                 }
 
-        suspend fun reportUsage(namespace: String, id: String) =
+        suspend fun reportUsage(
+                namespace: String,
+                id: String,
+                query: String? = null,
+                wasFirstResult: Boolean = false
+        ) =
                 withContext(Dispatchers.IO) {
                         val session = appSearchSession ?: return@withContext
                         try {
@@ -341,6 +364,17 @@ class SearchRepository(private val context: Context) {
                                                 .setUsageTimestampMillis(System.currentTimeMillis())
                                                 .build()
                                 session.reportUsageAsync(request).get()
+
+                                // Only invalidate the cache if we picked a result that wasn't first
+                                // (meaning the order might change next time)
+                                if (!wasFirstResult && query != null && query.isNotEmpty()) {
+                                        val firstLetter = query.substring(0, 1)
+                                        if (firstLetter.matches(SINGLE_LETTER_PATTERN)) {
+                                                searchCache.remove(firstLetter.lowercase())
+                                        }
+                                }
+
+                                lastUsageReportTime = System.currentTimeMillis()
                         } catch (e: Exception) {
                                 e.printStackTrace()
                         }
@@ -348,6 +382,7 @@ class SearchRepository(private val context: Context) {
 
         private suspend fun indexApps() =
                 withContext(Dispatchers.IO) {
+                        searchCache.clear() // Invalidate cache
                         val session = appSearchSession ?: return@withContext
                         val packageManager = context.packageManager
                         val intent =
@@ -524,6 +559,7 @@ class SearchRepository(private val context: Context) {
 
         suspend fun indexContacts() =
                 withContext(Dispatchers.IO) {
+                        searchCache.clear() // Invalidate cache
                         val session = appSearchSession ?: return@withContext
                         if (context.checkSelfPermission(
                                         android.Manifest.permission.READ_CONTACTS
@@ -611,6 +647,14 @@ class SearchRepository(private val context: Context) {
                         val session = appSearchSession
                         if (session == null) return@withContext emptyList()
 
+                        // Check cache for single-letter queries
+                        if (query.matches(SINGLE_LETTER_PATTERN)) {
+                                val cached = searchCache[query.lowercase()]
+                                if (cached != null) {
+                                        return@withContext cached
+                                }
+                        }
+
                         val results = mutableListOf<SearchResult>()
 
                         // 1. Custom Shortcuts (Triggers)
@@ -630,6 +674,15 @@ class SearchRepository(private val context: Context) {
                         results.addAll(searchAppIndex(query, filterCustomShortcuts, limit))
 
                         results.sortByDescending { it.rankingScore }
+
+                        // Cache single-letter queries (but not immediately after usage report)
+                        if (query.matches(SINGLE_LETTER_PATTERN)) {
+                                val timeSinceLastUsage =
+                                        System.currentTimeMillis() - lastUsageReportTime
+                                if (timeSinceLastUsage > CACHE_COOLDOWN_MS) {
+                                        searchCache[query.lowercase()] = results
+                                }
+                        }
 
                         results
                 }

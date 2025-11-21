@@ -15,6 +15,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -306,8 +307,10 @@ fun SearchScreen(
                                     reverseLayout = true,
                                     contentPadding = PaddingValues(vertical = 8.dp)
                             ) {
-                                items(searchResults, key = { "${it.namespace}/${it.id}" }) { result
-                                    ->
+                                itemsIndexed(
+                                        searchResults,
+                                        key = { _, item -> "${item.namespace}/${item.id}" }
+                                ) { index, result ->
                                     SearchResultItem(
                                             result = result,
                                             isFavorite = favoriteIds.contains(result.id),
@@ -389,7 +392,9 @@ fun SearchScreen(
                                                                 scope.launch {
                                                                     searchRepository.reportUsage(
                                                                             result.namespace,
-                                                                            result.id
+                                                                            result.id,
+                                                                            query,
+                                                                            index == 0
                                                                     )
                                                                 }
                                                                 onDismiss()
@@ -418,7 +423,9 @@ fun SearchScreen(
                                                                 context,
                                                                 result,
                                                                 searchRepository,
-                                                                scope
+                                                                scope,
+                                                                query,
+                                                                index == 0
                                                         )
                                                         onDismiss()
                                                     }
@@ -583,7 +590,9 @@ fun SearchScreen(
                                                                                             topResult
                                                                                                     .namespace,
                                                                                             topResult
-                                                                                                    .id
+                                                                                                    .id,
+                                                                                            query,
+                                                                                            true
                                                                                     )
                                                                         }
                                                                         onDismiss()
@@ -701,9 +710,11 @@ private fun launchResult(
         context: Context,
         result: SearchResult,
         searchRepository: SearchRepository,
-        scope: kotlinx.coroutines.CoroutineScope
+        scope: kotlinx.coroutines.CoroutineScope,
+        query: String = "",
+        wasFirstResult: Boolean = false
 ) {
-    when (result) {
+        when (result) {
         is SearchResult.App -> {
             val launchIntent = context.packageManager.getLaunchIntentForPackage(result.packageName)
             launchIntent?.let {
@@ -800,7 +811,14 @@ private fun launchResult(
     }
 
     // Usage reporting
-    scope.launch { searchRepository.reportUsage(result.namespace, result.id) }
+    scope.launch {
+        searchRepository.reportUsage(
+                result.namespace,
+                result.id,
+                query,
+                wasFirstResult
+        )
+    }
 }
 
 internal fun Drawable.toImageBitmap(): ImageBitmap? {
