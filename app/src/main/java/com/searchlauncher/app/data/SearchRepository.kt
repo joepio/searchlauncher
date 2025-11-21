@@ -5,8 +5,6 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Color
 import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.LayerDrawable
 import androidx.appsearch.app.AppSearchSession
 import androidx.appsearch.app.PutDocumentsRequest
 import androidx.appsearch.app.SearchSpec
@@ -27,6 +25,8 @@ class SearchRepository(private val context: Context) {
         private val documentCache = Collections.synchronizedList(mutableListOf<AppSearchDocument>())
         private var appSearchSession: AppSearchSession? = null
         private val executor = Executors.newSingleThreadExecutor()
+        private val smartActionManager = SmartActionManager(context)
+        private val iconGenerator = SearchIconGenerator(context)
 
         // Tracks whether the search index has been fully initialized.
         // This is used to prevent the UI from querying the index before it's ready,
@@ -623,7 +623,7 @@ class SearchRepository(private val context: Context) {
 
                         // 3. Smart Actions
                         if (query.isNotEmpty()) {
-                                results.addAll(checkSmartActions(query))
+                                results.addAll(smartActionManager.checkSmartActions(query))
                         }
 
                         // 4. AppSearch Index
@@ -656,7 +656,7 @@ class SearchRepository(private val context: Context) {
                 }
 
                 val results = mutableListOf<SearchResult>()
-                val icon = getColoredSearchIcon(shortcut.color, shortcut.alias)
+                val icon = iconGenerator.getColoredSearchIcon(shortcut.color, shortcut.alias)
 
                 val url =
                         String.format(
@@ -886,91 +886,9 @@ class SearchRepository(private val context: Context) {
                 executor.shutdown()
         }
 
+        // Delegation method for icon generation
         fun getColoredSearchIcon(color: Long?, text: String? = null): Drawable? {
-                if (color == null) return null
-
-                if (text != null) {
-                        val density = context.resources.displayMetrics.density
-                        // 40dp to pixels - matching the icon size in the UI
-                        val size = (40 * density).toInt()
-
-                        val bitmap =
-                                android.graphics.Bitmap.createBitmap(
-                                        size,
-                                        size,
-                                        android.graphics.Bitmap.Config.ARGB_8888
-                                )
-                        val canvas = android.graphics.Canvas(bitmap)
-
-                        // Draw rounded background
-                        val paint =
-                                android.graphics.Paint().apply {
-                                        this.color = color.toInt()
-                                        this.isAntiAlias = true
-                                        this.style = android.graphics.Paint.Style.FILL
-                                }
-
-                        // Draw rounded rect for background
-                        val rect = android.graphics.RectF(0f, 0f, size.toFloat(), size.toFloat())
-                        val cornerRadius = 8 * density
-                        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
-
-                        // Draw text
-                        val textPaint =
-                                android.graphics.Paint().apply {
-                                        this.color = Color.WHITE
-                                        // Adjust text size to be roughly 50% of the box height
-                                        this.textSize = size * 0.5f
-                                        this.isAntiAlias = true
-                                        this.textAlign = android.graphics.Paint.Align.CENTER
-                                        this.typeface =
-                                                android.graphics.Typeface.create(
-                                                        android.graphics.Typeface.DEFAULT,
-                                                        android.graphics.Typeface.BOLD
-                                                )
-                                }
-
-                        val displayText = text.uppercase()
-                        val maxTextWidth = size * 0.85f
-                        var currentTextSize = size * 0.5f
-                        textPaint.textSize = currentTextSize
-
-                        // Dynamic text scaling
-                        while (textPaint.measureText(displayText) > maxTextWidth &&
-                                currentTextSize > 10f) {
-                                currentTextSize -= 2f
-                                textPaint.textSize = currentTextSize
-                        }
-
-                        // Center text both horizontally and vertically
-                        val xPos = size / 2f
-                        val yPos = (size / 2f) - ((textPaint.descent() + textPaint.ascent()) / 2f)
-
-                        canvas.drawText(displayText, xPos, yPos, textPaint)
-
-                        return android.graphics.drawable.BitmapDrawable(context.resources, bitmap)
-                }
-
-                val background = GradientDrawable()
-                background.shape = GradientDrawable.RECTANGLE
-                // Match the 8.dp corner radius used for Contact icons
-                val cornerRadius = 8 * context.resources.displayMetrics.density
-                background.cornerRadius = cornerRadius
-                background.setColor(color.toInt())
-
-                val icon =
-                        context.getDrawable(com.searchlauncher.app.R.drawable.ic_search)?.mutate()
-                icon?.setTint(Color.WHITE)
-
-                if (icon == null) return background
-
-                val layers = arrayOf(background, icon)
-                val layerDrawable = LayerDrawable(layers)
-
-                val inset = (6 * context.resources.displayMetrics.density).toInt()
-                layerDrawable.setLayerInset(1, inset, inset, inset, inset)
-
-                return layerDrawable
+                return iconGenerator.getColoredSearchIcon(color, text)
         }
 
         private fun convertDocumentToResult(
@@ -1068,7 +986,10 @@ class SearchRepository(private val context: Context) {
                                                 it.alias == alias
                                         }
                                 val icon =
-                                        getColoredSearchIcon(shortcutDef?.color, shortcutDef?.alias)
+                                        iconGenerator.getColoredSearchIcon(
+                                                shortcutDef?.color,
+                                                shortcutDef?.alias
+                                        )
 
                                 SearchResult.SearchIntent(
                                         id = doc.id,
@@ -1179,142 +1100,5 @@ class SearchRepository(private val context: Context) {
                 }
         }
 
-        private fun checkSmartActions(query: String): List<SearchResult> {
-                val results = mutableListOf<SearchResult>()
-
-                // Phone Number Check
-                val phoneMatcher = android.util.Patterns.PHONE.matcher(query)
-                val isPhone = phoneMatcher.matches() && query.length >= 3
-
-                // Check for explicit triggers
-                val lowerQuery = query.lowercase()
-                val isCallTrigger = lowerQuery.startsWith("call ")
-                val isSmsTrigger = lowerQuery.startsWith("sms ") || lowerQuery.startsWith("text ")
-
-                var phoneQuery = query
-                if (isCallTrigger) {
-                        phoneQuery = query.substring(5).trim()
-                } else if (isSmsTrigger) {
-                        if (lowerQuery.startsWith("sms ")) {
-                                phoneQuery = query.substring(4).trim()
-                        } else {
-                                phoneQuery = query.substring(5).trim()
-                        }
-                }
-
-                val isExplicitPhone =
-                        (isCallTrigger || isSmsTrigger) &&
-                                android.util.Patterns.PHONE.matcher(phoneQuery).matches() &&
-                                phoneQuery.length >= 3
-
-                if (isPhone || isExplicitPhone) {
-                        val targetNumber = if (isExplicitPhone) phoneQuery else query
-
-                        // Call Action
-                        if (isPhone || isCallTrigger) {
-                                val callIcon =
-                                        context.getDrawable(android.R.drawable.sym_action_call)
-                                results.add(
-                                        SearchResult.Content(
-                                                id = "smart_action_call_$targetNumber",
-                                                namespace = "smart_actions",
-                                                title = "Call $targetNumber",
-                                                subtitle = "Phone",
-                                                icon = callIcon,
-                                                packageName = "com.android.dialer", // Best effort
-                                                deepLink = "tel:$targetNumber",
-                                                rankingScore = 100 // High priority
-                                        )
-                                )
-                        }
-
-                        // Text Action
-                        if (isPhone || isSmsTrigger) {
-                                val messageIcon =
-                                        context.getDrawable(android.R.drawable.sym_action_chat)
-                                results.add(
-                                        SearchResult.Content(
-                                                id = "smart_action_sms_$targetNumber",
-                                                namespace = "smart_actions",
-                                                title = "Text $targetNumber",
-                                                subtitle = "SMS",
-                                                icon = messageIcon,
-                                                packageName = "com.android.mms", // Best effort
-                                                deepLink = "sms:$targetNumber",
-                                                rankingScore = 99 // Slightly lower than call
-                                        )
-                                )
-                        }
-                }
-
-                // Email Check
-                val emailMatcher = android.util.Patterns.EMAIL_ADDRESS.matcher(query)
-                val isEmail = emailMatcher.matches()
-
-                val isEmailTrigger =
-                        lowerQuery.startsWith("email ") || lowerQuery.startsWith("mailto ")
-                var emailQuery = query
-                if (isEmailTrigger) {
-                        if (lowerQuery.startsWith("email ")) {
-                                emailQuery = query.substring(6).trim()
-                        } else {
-                                emailQuery = query.substring(7).trim()
-                        }
-                }
-
-                val isExplicitEmail =
-                        isEmailTrigger &&
-                                android.util.Patterns.EMAIL_ADDRESS.matcher(emailQuery).matches()
-
-                if (isEmail || isExplicitEmail) {
-                        val targetEmail = if (isExplicitEmail) emailQuery else query
-                        val emailIcon = context.getDrawable(android.R.drawable.sym_action_email)
-                        results.add(
-                                SearchResult.Content(
-                                        id = "smart_action_email_$targetEmail",
-                                        namespace = "smart_actions",
-                                        title = "Send Email to $targetEmail",
-                                        subtitle = "Email",
-                                        icon = emailIcon,
-                                        packageName = "com.android.email", // Best effort
-                                        deepLink = "mailto:$targetEmail",
-                                        rankingScore = 100
-                                )
-                        )
-                }
-
-                // URL Check
-                val urlMatcher = android.util.Patterns.WEB_URL.matcher(query)
-                if (urlMatcher.matches()) {
-                        val url =
-                                if (!query.startsWith("http://") && !query.startsWith("https://")) {
-                                        "https://$query"
-                                } else {
-                                        query
-                                }
-
-                        // Use a generic browser icon or similar if available, otherwise default
-                        // search icon
-                        val browserIcon =
-                                context.getDrawable(android.R.drawable.ic_menu_compass)
-                                        ?: context.getDrawable(android.R.drawable.ic_menu_search)
-
-                        results.add(
-                                SearchResult.Content(
-                                        id = "smart_action_url_$query",
-                                        namespace = "smart_actions",
-                                        title = "Open $query",
-                                        subtitle = "Website",
-                                        icon = browserIcon,
-                                        packageName =
-                                                "com.android.chrome", // Best effort, system handles
-                                        // it
-                                        deepLink = url,
-                                        rankingScore = 98 // Slightly lower than direct actions
-                                )
-                        )
-                }
-
-                return results
-        }
+        // checkSmartActions extracted to SmartActionManager
 }

@@ -8,29 +8,20 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.widget.Toast
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,17 +36,18 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.PopupProperties
 import androidx.core.graphics.drawable.toBitmap
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import coil.compose.AsyncImage
 import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.data.SearchResult
+import com.searchlauncher.app.ui.components.FavoritesRow
+import com.searchlauncher.app.ui.components.QuickCopyDialog
+import com.searchlauncher.app.ui.components.SearchResultItem
 import com.searchlauncher.app.ui.theme.SearchLauncherTheme
 import com.searchlauncher.app.util.CustomActionHandler
 import kotlinx.coroutines.Dispatchers
@@ -705,204 +697,6 @@ fun SearchScreen(
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun SearchResultItem(
-        result: SearchResult,
-        isFavorite: Boolean = false,
-        onToggleFavorite: (() -> Unit)? = null,
-        onEditQuickCopy: (() -> Unit)? = null,
-        onCreateQuickCopy: (() -> Unit)? = null,
-        onClick: () -> Unit
-) {
-    var showMenu by remember { mutableStateOf(false) }
-
-    Box {
-        Row(
-                modifier =
-                        Modifier.fillMaxWidth()
-                                .then(
-                                        if (onToggleFavorite != null) {
-                                            Modifier.combinedClickable(
-                                                    onClick = onClick,
-                                                    onLongClick = { showMenu = true }
-                                            )
-                                        } else if (result is SearchResult.QuickCopy) {
-                                            Modifier.combinedClickable(
-                                                    onClick = onClick,
-                                                    onLongClick = { showMenu = true }
-                                            )
-                                        } else {
-                                            Modifier.clickable(onClick = onClick)
-                                        }
-                                )
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(modifier = Modifier.size(40.dp)) {
-                if (result.icon != null) {
-                    val iconModifier =
-                            if (result is SearchResult.Contact ||
-                                            result is SearchResult.QuickCopy ||
-                                            result is SearchResult.SearchIntent
-                            ) {
-                                Modifier.size(40.dp).clip(RoundedCornerShape(8.dp))
-                            } else {
-                                Modifier.size(40.dp)
-                            }
-                    val imageBitmap = result.icon?.toImageBitmap()
-                    if (imageBitmap != null) {
-                        Image(
-                                bitmap = imageBitmap,
-                                contentDescription = null,
-                                modifier = iconModifier
-                        )
-                    }
-                }
-
-                if (result is SearchResult.Shortcut && result.appIcon != null) {
-                    val appIconBitmap = result.appIcon.toImageBitmap()
-                    if (appIconBitmap != null) {
-                        Image(
-                                bitmap = appIconBitmap,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp).align(Alignment.TopStart)
-                        )
-                    }
-                }
-            }
-
-            Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
-                Text(
-                        text = result.title,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        if (showMenu) {
-            val context = LocalContext.current
-            DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant),
-                    properties = PopupProperties(focusable = false)
-            ) {
-                if (result is SearchResult.QuickCopy) {
-                    DropdownMenuItem(
-                            text = { Text("Edit") },
-                            onClick = {
-                                onEditQuickCopy?.invoke()
-                                showMenu = false
-                            },
-                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
-                    )
-                    DropdownMenuItem(
-                            text = { Text("Delete") },
-                            onClick = {
-                                val app =
-                                        context.applicationContext as
-                                                com.searchlauncher.app.SearchLauncherApp
-                                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-                                    app.quickCopyRepository.removeItem(result.alias)
-                                }
-                                showMenu = false
-                            },
-                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) }
-                    )
-                    DropdownMenuItem(
-                            text = { Text("Create New") },
-                            onClick = {
-                                onCreateQuickCopy?.invoke()
-                                showMenu = false
-                            },
-                            leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) }
-                    )
-                }
-
-                if (onToggleFavorite != null) {
-                    DropdownMenuItem(
-                            text = {
-                                Text(
-                                        if (isFavorite) "Remove from Favorites"
-                                        else "Add to Favorites"
-                                )
-                            },
-                            onClick = {
-                                onToggleFavorite()
-                                showMenu = false
-                            },
-                            leadingIcon = {
-                                Icon(
-                                        imageVector =
-                                                if (isFavorite) {
-                                                    androidx.compose.material.icons.Icons.Default
-                                                            .Star
-                                                } else {
-                                                    androidx.compose.material.icons.Icons.Default
-                                                            .StarBorder
-                                                },
-                                        contentDescription = null
-                                )
-                            }
-                    )
-                }
-
-                if (result is SearchResult.App) {
-                    DropdownMenuItem(
-                            text = { Text("App Info") },
-                            onClick = {
-                                try {
-                                    val intent =
-                                            Intent(
-                                                    android.provider.Settings
-                                                            .ACTION_APPLICATION_DETAILS_SETTINGS
-                                            )
-                                    intent.data = Uri.parse("package:${result.packageName}")
-                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    Toast.makeText(
-                                                    context,
-                                                    "Cannot open App Info",
-                                                    Toast.LENGTH_SHORT
-                                            )
-                                            .show()
-                                }
-                                showMenu = false
-                            },
-                            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) }
-                    )
-                    DropdownMenuItem(
-                            text = { Text("Uninstall") },
-                            onClick = {
-                                try {
-                                    val intent = Intent(Intent.ACTION_DELETE)
-                                    intent.data = Uri.parse("package:${result.packageName}")
-                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    Toast.makeText(
-                                                    context,
-                                                    "Cannot start uninstall",
-                                                    Toast.LENGTH_SHORT
-                                            )
-                                            .show()
-                                }
-                                showMenu = false
-                            },
-                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) }
-                    )
-                }
-            }
-        }
-    }
-}
-
 private fun launchResult(
         context: Context,
         result: SearchResult,
@@ -1009,7 +803,7 @@ private fun launchResult(
     scope.launch { searchRepository.reportUsage(result.namespace, result.id) }
 }
 
-private fun Drawable.toImageBitmap(): ImageBitmap? {
+internal fun Drawable.toImageBitmap(): ImageBitmap? {
     try {
         val bitmap =
                 if (this is BitmapDrawable) {
@@ -1033,181 +827,6 @@ private fun Drawable.toImageBitmap(): ImageBitmap? {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun FavoritesRow(
-        favorites: List<SearchResult>,
-        onLaunch: (SearchResult) -> Unit,
-        onRemoveFavorite: (SearchResult) -> Unit
-) {
-    // Calculate spacing based on count? Standard spacedBy is usually fine.
-    // "If there are a lot of icons, make them smaller"
-    // We can check the count and adjust size/spacing.
-    val isCrowded = favorites.size > 5
-    val iconSize = if (isCrowded) 40.dp else 48.dp
-    // Minimal spacing/padding requested
-    val spacing = 4.dp
+// FavoritesRow extracted to components/FavoritesRow.kt
 
-    androidx.compose.foundation.lazy.LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(spacing, Alignment.Start),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        items(favorites) { result ->
-            var showMenu by remember { mutableStateOf(false) }
-
-            Box(
-                    modifier =
-                            Modifier.size(iconSize)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .combinedClickable(
-                                            onClick = { onLaunch(result) },
-                                            onLongClick = { showMenu = true }
-                                    ),
-                    contentAlignment = Alignment.Center
-            ) {
-                val imageBitmap = result.icon?.toImageBitmap()
-                if (imageBitmap != null) {
-                    // Use slightly smaller image inside the touch target
-                    val imageSize = if (isCrowded) 32.dp else 40.dp
-                    Image(
-                            bitmap = imageBitmap,
-                            contentDescription = result.title,
-                            modifier = Modifier.size(imageSize)
-                    )
-                }
-
-                DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false },
-                        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant),
-                        properties = PopupProperties(focusable = false)
-                ) {
-                    DropdownMenuItem(
-                            text = { Text("Remove from Favorites") },
-                            onClick = {
-                                onRemoveFavorite(result)
-                                showMenu = false
-                            },
-                            leadingIcon = {
-                                Icon(imageVector = Icons.Default.Star, contentDescription = null)
-                            }
-                    )
-
-                    if (result is SearchResult.App) {
-                        val context = LocalContext.current
-                        DropdownMenuItem(
-                                text = { Text("App Info") },
-                                onClick = {
-                                    try {
-                                        val intent =
-                                                Intent(
-                                                        android.provider.Settings
-                                                                .ACTION_APPLICATION_DETAILS_SETTINGS
-                                                )
-                                        intent.data = Uri.parse("package:${result.packageName}")
-                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) {
-                                        Toast.makeText(
-                                                        context,
-                                                        "Cannot open App Info",
-                                                        Toast.LENGTH_SHORT
-                                                )
-                                                .show()
-                                    }
-                                    showMenu = false
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Info, contentDescription = null)
-                                }
-                        )
-                        DropdownMenuItem(
-                                text = { Text("Uninstall") },
-                                onClick = {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_DELETE)
-                                        intent.data = Uri.parse("package:${result.packageName}")
-                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) {
-                                        Toast.makeText(
-                                                        context,
-                                                        "Cannot start uninstall",
-                                                        Toast.LENGTH_SHORT
-                                                )
-                                                .show()
-                                    }
-                                    showMenu = false
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Delete, contentDescription = null)
-                                }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun QuickCopyDialog(
-        initialAlias: String,
-        initialContent: String,
-        isEditMode: Boolean,
-        onDismiss: () -> Unit,
-        onConfirm: (String, String) -> Unit
-) {
-    var alias by remember { mutableStateOf(initialAlias) }
-    var content by remember { mutableStateOf(initialContent) }
-    var aliasError by remember { mutableStateOf(false) }
-
-    AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(if (isEditMode) "Edit Quick Copy" else "New Quick Copy") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                            value = alias,
-                            onValueChange = {
-                                alias = it
-                                aliasError = false
-                            },
-                            label = { Text("Alias") },
-                            isError = aliasError,
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                    )
-                    if (aliasError) {
-                        Text(
-                                text = "Alias cannot be empty",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(start = 16.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                            value = content,
-                            onValueChange = { content = it },
-                            label = { Text("Content") },
-                            modifier = Modifier.fillMaxWidth(),
-                            minLines = 3
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                        onClick = {
-                            if (alias.isBlank()) {
-                                aliasError = true
-                            } else {
-                                onConfirm(alias, content)
-                            }
-                        }
-                ) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
-}
+// QuickCopyDialog extracted to components/QuickCopyDialog.kt
