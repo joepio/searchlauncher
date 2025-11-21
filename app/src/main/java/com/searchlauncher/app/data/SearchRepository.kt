@@ -266,9 +266,9 @@ class SearchRepository(private val context: Context) {
                                                                 .setResultCountPerPage(50)
                                                                 .build()
 
-                                                // Try searching for everything in the namespace to get usage stats for all shortcuts
-                                                val searchResults =
-                                                        session.search("", searchSpec)
+                                                // Try searching for everything in the namespace to
+                                                // get usage stats for all shortcuts
+                                                val searchResults = session.search("", searchSpec)
                                                 val page = searchResults.nextPageAsync.get()
 
                                                 // Build a map of document ID to usage count
@@ -617,213 +617,192 @@ class SearchRepository(private val context: Context) {
                         if (session == null) return@withContext emptyList()
 
                         val results = mutableListOf<SearchResult>()
-                        var filterCustomShortcuts = false
 
+                        // 1. Custom Shortcuts (Triggers)
+                        val customShortcutResults = findMatchingCustomShortcut(query)
+                        results.addAll(customShortcutResults)
+                        val filterCustomShortcuts = customShortcutResults.isNotEmpty()
+
+                        // 2. QuickCopy Items
+                        results.addAll(getQuickCopyResults(query))
+
+                        // 3. Smart Actions
                         if (query.isNotEmpty()) {
-                                val parts = query.split(" ", limit = 2)
-                                if (parts.size >= 2) {
-                                        val trigger = parts[0]
-                                        val searchTerm = parts[1]
-                                        val shortcut =
-                                                CustomShortcuts.shortcuts.filterIsInstance<
-                                                                CustomShortcut.Search>()
-                                                        .find {
-                                                                it.trigger.equals(
-                                                                        trigger,
-                                                                        ignoreCase = true
-                                                                )
-                                                        }
-
-                                        if (shortcut != null) {
-                                                filterCustomShortcuts = true
-                                                val icon = getColoredSearchIcon(shortcut.color)
-
-                                                val url =
-                                                        String.format(
-                                                                shortcut.urlTemplate,
-                                                                java.net.URLEncoder.encode(
-                                                                        searchTerm,
-                                                                        "UTF-8"
-                                                                )
-                                                        )
-                                                results.add(
-                                                        SearchResult.Content(
-                                                                id = "shortcut_${shortcut.trigger}",
-                                                                namespace = "custom_shortcuts",
-                                                                title =
-                                                                        "${shortcut.description}: $searchTerm",
-                                                                subtitle = "Custom Shortcut",
-                                                                icon = icon,
-                                                                packageName = shortcut.packageName
-                                                                                ?: "android",
-                                                                deepLink = url
-                                                        )
-                                                )
-
-                                                val suggestionUrl = shortcut.suggestionUrl
-                                                if (suggestionUrl != null && searchTerm.isNotEmpty()
-                                                ) {
-                                                        val suggestions =
-                                                                fetchSuggestions(
-                                                                        suggestionUrl,
-                                                                        searchTerm
-                                                                )
-                                                        suggestions.forEach { suggestion ->
-                                                                val suggestionUrlFormatted =
-                                                                        String.format(
-                                                                                shortcut.urlTemplate,
-                                                                                java.net.URLEncoder
-                                                                                        .encode(
-                                                                                                suggestion,
-                                                                                                "UTF-8"
-                                                                                        )
-                                                                        )
-                                                                results.add(
-                                                                        SearchResult.Content(
-                                                                                id =
-                                                                                        "suggestion_${shortcut.trigger}_$suggestion",
-                                                                                namespace =
-                                                                                        "custom_shortcuts",
-                                                                                title = suggestion,
-                                                                                subtitle =
-                                                                                        "${shortcut.description} Suggestion",
-                                                                                icon = icon,
-                                                                                packageName =
-                                                                                        shortcut.packageName
-                                                                                                ?: "android",
-                                                                                deepLink =
-                                                                                        suggestionUrlFormatted
-                                                                        )
-                                                                )
-                                                        }
-                                                }
-                                        }
-                                }
+                                results.addAll(checkSmartActions(query))
                         }
 
-                        // Add QuickCopy items
-                        if (query.isNotEmpty()) {
-                                val app = context.applicationContext as? SearchLauncherApp
-                                app?.quickCopyRepository?.searchItems(query)?.forEach { item ->
-                                        val clipboardIcon =
-                                                context.getDrawable(android.R.drawable.ic_menu_edit)
-                                        results.add(
-                                                SearchResult.QuickCopy(
-                                                        id = "quickcopy_${item.alias}",
-                                                        namespace = "quickcopy",
-                                                        title = item.alias,
-                                                        subtitle =
-                                                                item.content.take(50) +
-                                                                        if (item.content.length > 50
-                                                                        )
-                                                                                "..."
-                                                                        else "",
-                                                        icon = clipboardIcon,
-                                                        alias = item.alias,
-                                                        content = item.content,
-                                                        rankingScore =
-                                                                95 // High priority but below exact
-                                                        // app matches
-                                                        )
-                                        )
-                                }
-                        }
-
-                        // Add Smart Actions (Phone/Email)
-                        if (query.isNotEmpty()) {
-                                val smartActions = checkSmartActions(query)
-                                results.addAll(smartActions)
-                        }
-
-                        try {
-                                val searchSpecBuilder =
-                                        SearchSpec.Builder()
-                                                .setRankingStrategy(
-                                                        SearchSpec.RANKING_STRATEGY_USAGE_COUNT
-                                                )
-                                                .setTermMatch(SearchSpec.TERM_MATCH_PREFIX)
-
-                                if (filterCustomShortcuts) {
-                                        searchSpecBuilder.addFilterNamespaces("apps", "shortcuts")
-                                }
-
-                                val searchSpec = searchSpecBuilder.build()
-                                val searchResults = session.search(query, searchSpec)
-                                var nextPage = searchResults.nextPageAsync.get()
-                                val appSearchResults = mutableListOf<SearchResult>()
-
-                                while (nextPage.isNotEmpty()) {
-                                        for (result in nextPage) {
-                                                val doc =
-                                                        result.genericDocument.toDocumentClass(
-                                                                AppSearchDocument::class.java
-                                                        )
-                                                val baseScore = result.rankingSignal.toInt()
-                                                val isSettings =
-                                                        doc.id == "com.android.settings" ||
-                                                                doc.intentUri?.contains(
-                                                                        "android.settings.SETTINGS"
-                                                                ) == true
-                                                val boost =
-                                                        if (isSettings) 15
-                                                        else if (doc.namespace == "apps") 5 else 0
-                                                appSearchResults.add(
-                                                        convertDocumentToResult(
-                                                                doc,
-                                                                baseScore + boost
-                                                        )
-                                                )
-                                        }
-                                        if (limit > 0 && appSearchResults.size >= limit * 2) break
-                                        nextPage = searchResults.nextPageAsync.get()
-                                }
-
-                                // Fuzzy Search
-                                if (query.length >= 2) {
-                                        val existingIds = appSearchResults.map { it.id }.toSet()
-                                        val fuzzyDocs =
-                                                synchronized(documentCache) {
-                                                        documentCache.toList()
-                                                }
-
-                                        val fuzzyMatches =
-                                                fuzzyDocs
-                                                        .map { doc ->
-                                                                val score =
-                                                                        FuzzyMatch.calculateScore(
-                                                                                query,
-                                                                                doc.name
-                                                                        )
-                                                                doc to score
-                                                        }
-                                                        .filter { it.second > 40 }
-                                                        .sortedByDescending { it.second }
-                                                        .take(10)
-
-                                        for ((doc, _) in fuzzyMatches) {
-                                                if (doc.id !in existingIds) {
-                                                        val boost =
-                                                                if (doc.namespace == "apps") 5
-                                                                else 0
-                                                        appSearchResults.add(
-                                                                convertDocumentToResult(doc, boost)
-                                                        ) // Base score 0 for fuzzy
-                                                }
-                                        }
-                                }
-
-                                appSearchResults.sortByDescending { it.rankingScore }
-                                if (limit > 0) {
-                                        results.addAll(appSearchResults.take(limit))
-                                } else {
-                                        results.addAll(appSearchResults)
-                                }
-                        } catch (e: Exception) {
-                                e.printStackTrace()
-                        }
+                        // 4. AppSearch Index
+                        results.addAll(searchAppIndex(query, filterCustomShortcuts, limit))
 
                         results
                 }
+
+        private fun findMatchingCustomShortcut(query: String): List<SearchResult> {
+                if (query.isEmpty()) return emptyList()
+                val parts = query.split(" ", limit = 2)
+                if (parts.size < 2) return emptyList()
+
+                val trigger = parts[0]
+                val searchTerm = parts[1]
+                val shortcut =
+                        CustomShortcuts.shortcuts.filterIsInstance<CustomShortcut.Search>().find {
+                                it.trigger.equals(trigger, ignoreCase = true)
+                        }
+                                ?: return emptyList()
+
+                val results = mutableListOf<SearchResult>()
+                val icon = getColoredSearchIcon(shortcut.color, shortcut.trigger)
+
+                val url =
+                        String.format(
+                                shortcut.urlTemplate,
+                                java.net.URLEncoder.encode(searchTerm, "UTF-8")
+                        )
+                results.add(
+                        SearchResult.Content(
+                                id = "shortcut_${shortcut.trigger}",
+                                namespace = "custom_shortcuts",
+                                title = "${shortcut.description}: $searchTerm",
+                                subtitle = "Custom Shortcut",
+                                icon = icon,
+                                packageName = shortcut.packageName ?: "android",
+                                deepLink = url
+                        )
+                )
+
+                val suggestionUrl = shortcut.suggestionUrl
+                if (suggestionUrl != null && searchTerm.isNotEmpty()) {
+                        val suggestions = fetchSuggestions(suggestionUrl, searchTerm)
+                        suggestions.forEach { suggestion ->
+                                val suggestionUrlFormatted =
+                                        String.format(
+                                                shortcut.urlTemplate,
+                                                java.net.URLEncoder.encode(suggestion, "UTF-8")
+                                        )
+                                results.add(
+                                        SearchResult.Content(
+                                                id = "suggestion_${shortcut.trigger}_$suggestion",
+                                                namespace = "custom_shortcuts",
+                                                title = suggestion,
+                                                subtitle = "${shortcut.description} Suggestion",
+                                                icon = icon,
+                                                packageName = shortcut.packageName ?: "android",
+                                                deepLink = suggestionUrlFormatted
+                                        )
+                                )
+                        }
+                }
+                return results
+        }
+
+        private fun getQuickCopyResults(query: String): List<SearchResult> {
+                if (query.isEmpty()) return emptyList()
+                val app = context.applicationContext as? SearchLauncherApp ?: return emptyList()
+                val clipboardIcon = context.getDrawable(android.R.drawable.ic_menu_edit)
+
+                return app.quickCopyRepository.searchItems(query).map { item ->
+                        SearchResult.QuickCopy(
+                                id = "quickcopy_${item.alias}",
+                                namespace = "quickcopy",
+                                title = item.alias,
+                                subtitle =
+                                        item.content.take(50) +
+                                                if (item.content.length > 50) "..." else "",
+                                icon = clipboardIcon,
+                                alias = item.alias,
+                                content = item.content,
+                                rankingScore = 95
+                        )
+                }
+        }
+
+        private suspend fun searchAppIndex(
+                query: String,
+                filterCustomShortcuts: Boolean,
+                limit: Int
+        ): List<SearchResult> {
+                val session = appSearchSession ?: return emptyList()
+                val appSearchResults = mutableListOf<SearchResult>()
+
+                try {
+                        val searchSpecBuilder =
+                                SearchSpec.Builder()
+                                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_USAGE_COUNT)
+                                        .setTermMatch(SearchSpec.TERM_MATCH_PREFIX)
+
+                        if (filterCustomShortcuts) {
+                                searchSpecBuilder.addFilterNamespaces("apps", "shortcuts")
+                        }
+
+                        // Optimization: For short queries, limit scope to apps only
+                        if (query.length < 3) {
+                                // Restrict to "apps" and "custom_shortcuts" namespace to avoid
+                                // expensive contact
+                                // lookups/large result sets, but still show search shortcuts
+                                searchSpecBuilder.addFilterNamespaces("apps", "custom_shortcuts")
+                        }
+
+                        val searchSpec = searchSpecBuilder.build()
+                        val searchResults = session.search(query, searchSpec)
+                        var nextPage = searchResults.nextPageAsync.get()
+
+                        while (nextPage.isNotEmpty()) {
+                                for (result in nextPage) {
+                                        val doc =
+                                                result.genericDocument.toDocumentClass(
+                                                        AppSearchDocument::class.java
+                                                )
+                                        val baseScore = result.rankingSignal.toInt()
+                                        val isSettings =
+                                                doc.id == "com.android.settings" ||
+                                                        doc.intentUri?.contains(
+                                                                "android.settings.SETTINGS"
+                                                        ) == true
+                                        val boost =
+                                                if (isSettings) 15
+                                                else if (doc.namespace == "apps") 5 else 0
+                                        appSearchResults.add(
+                                                convertDocumentToResult(doc, baseScore + boost)
+                                        )
+                                }
+                                if (limit > 0 && appSearchResults.size >= limit * 2) break
+                                nextPage = searchResults.nextPageAsync.get()
+                        }
+
+                        // Fuzzy Search
+                        if (query.length >= 2) {
+                                val existingIds = appSearchResults.map { it.id }.toSet()
+                                val fuzzyMatches = getFuzzyMatches(query)
+
+                                for ((doc, _) in fuzzyMatches) {
+                                        if (doc.id !in existingIds) {
+                                                val boost = if (doc.namespace == "apps") 5 else 0
+                                                appSearchResults.add(
+                                                        convertDocumentToResult(doc, boost)
+                                                )
+                                        }
+                                }
+                        }
+
+                        appSearchResults.sortByDescending { it.rankingScore }
+                        return if (limit > 0) appSearchResults.take(limit) else appSearchResults
+                } catch (e: Exception) {
+                        e.printStackTrace()
+                        return emptyList()
+                }
+        }
+
+        private fun getFuzzyMatches(query: String): List<Pair<AppSearchDocument, Int>> {
+                val fuzzyDocs = synchronized(documentCache) { documentCache.toList() }
+                return fuzzyDocs
+                        .map { doc ->
+                                val score = FuzzyMatch.calculateScore(query, doc.name)
+                                doc to score
+                        }
+                        .filter { it.second > 40 }
+                        .sortedByDescending { it.second }
+                        .take(10)
+        }
 
         suspend fun searchContent(): List<SearchResult.Content> =
                 withContext(Dispatchers.IO) { emptyList() }
@@ -867,8 +846,58 @@ class SearchRepository(private val context: Context) {
                 executor.shutdown()
         }
 
-        private fun getColoredSearchIcon(color: Long?): Drawable? {
+        private fun getColoredSearchIcon(color: Long?, text: String? = null): Drawable? {
                 if (color == null) return null
+
+                if (text != null) {
+                        val density = context.resources.displayMetrics.density
+                        // 40dp to pixels - matching the icon size in the UI
+                        val size = (40 * density).toInt()
+
+                        val bitmap =
+                                android.graphics.Bitmap.createBitmap(
+                                        size,
+                                        size,
+                                        android.graphics.Bitmap.Config.ARGB_8888
+                                )
+                        val canvas = android.graphics.Canvas(bitmap)
+
+                        // Draw rounded background
+                        val paint =
+                                android.graphics.Paint().apply {
+                                        this.color = color.toInt()
+                                        this.isAntiAlias = true
+                                        this.style = android.graphics.Paint.Style.FILL
+                                }
+
+                        // Draw rounded rect for background
+                        val rect = android.graphics.RectF(0f, 0f, size.toFloat(), size.toFloat())
+                        val cornerRadius = 8 * density
+                        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
+
+                        // Draw text
+                        val textPaint =
+                                android.graphics.Paint().apply {
+                                        this.color = Color.WHITE
+                                        // Adjust text size to be roughly 50% of the box height
+                                        this.textSize = size * 0.5f
+                                        this.isAntiAlias = true
+                                        this.textAlign = android.graphics.Paint.Align.CENTER
+                                        this.typeface =
+                                                android.graphics.Typeface.create(
+                                                        android.graphics.Typeface.DEFAULT,
+                                                        android.graphics.Typeface.BOLD
+                                                )
+                                }
+
+                        // Center text both horizontally and vertically
+                        val xPos = size / 2f
+                        val yPos = (size / 2f) - ((textPaint.descent() + textPaint.ascent()) / 2f)
+
+                        canvas.drawText(text.uppercase().take(2), xPos, yPos, textPaint)
+
+                        return android.graphics.drawable.BitmapDrawable(context.resources, bitmap)
+                }
 
                 val background = GradientDrawable()
                 background.shape = GradientDrawable.RECTANGLE
@@ -988,7 +1017,11 @@ class SearchRepository(private val context: Context) {
                                                 CustomShortcuts.shortcuts.filterIsInstance<
                                                                 CustomShortcut.Search>()
                                                         .find { it.trigger == trigger }
-                                        val icon = getColoredSearchIcon(shortcutDef?.color)
+                                        val icon =
+                                                getColoredSearchIcon(
+                                                        shortcutDef?.color,
+                                                        shortcutDef?.trigger
+                                                )
 
                                         SearchResult.SearchIntent(
                                                 id = doc.id,

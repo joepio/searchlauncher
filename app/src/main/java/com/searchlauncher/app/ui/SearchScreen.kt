@@ -359,6 +359,10 @@ fun SearchScreen(
                                                                     !result.trigger.equals(
                                                                             query.trim(),
                                                                             ignoreCase = true
+                                                                    ) &&
+                                                                    !result.title.contains(
+                                                                            query.trim(),
+                                                                            ignoreCase = true
                                                                     )
                                                     ) {
                                                         // Perform Search
@@ -750,7 +754,9 @@ private fun SearchResultItem(
             Box(modifier = Modifier.size(40.dp)) {
                 if (result.icon != null) {
                     val iconModifier =
-                            if (result is SearchResult.Contact || result is SearchResult.QuickCopy
+                            if (result is SearchResult.Contact ||
+                                            result is SearchResult.QuickCopy ||
+                                            result is SearchResult.SearchIntent
                             ) {
                                 Modifier.size(40.dp).clip(RoundedCornerShape(8.dp))
                             } else {
