@@ -37,170 +37,165 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SearchResultItem(
-        result: SearchResult,
-        isFavorite: Boolean = false,
-        onToggleFavorite: (() -> Unit)? = null,
-        onEditQuickCopy: (() -> Unit)? = null,
-        onCreateQuickCopy: (() -> Unit)? = null,
-        onClick: () -> Unit
+  result: SearchResult,
+  isFavorite: Boolean = false,
+  onToggleFavorite: (() -> Unit)? = null,
+  onEditQuickCopy: (() -> Unit)? = null,
+  onCreateQuickCopy: (() -> Unit)? = null,
+  onClick: () -> Unit,
 ) {
- var showMenu by remember { mutableStateOf(false) }
+  var showMenu by remember { mutableStateOf(false) }
 
- Box {
-  Row(
-          modifier =
-                  Modifier.fillMaxWidth()
-                          .then(
-                                  if (onToggleFavorite != null) {
-                                   Modifier.combinedClickable(
-                                           onClick = onClick,
-                                           onLongClick = { showMenu = true }
-                                   )
-                                  } else if (result is SearchResult.QuickCopy) {
-                                   Modifier.combinedClickable(
-                                           onClick = onClick,
-                                           onLongClick = { showMenu = true }
-                                   )
-                                  } else {
-                                   Modifier.clickable(onClick = onClick)
-                                  }
-                          )
-                          .padding(horizontal = 16.dp, vertical = 8.dp),
-          verticalAlignment = Alignment.CenterVertically
-  ) {
-   Box(modifier = Modifier.size(40.dp)) {
-    if (result.icon != null) {
-     val iconModifier =
-             if (result is SearchResult.Contact ||
-                             result is SearchResult.QuickCopy ||
-                             result is SearchResult.SearchIntent
-             ) {
+  Box {
+    Row(
+      modifier =
+        Modifier.fillMaxWidth()
+          .then(
+            if (onToggleFavorite != null) {
+              Modifier.combinedClickable(onClick = onClick, onLongClick = { showMenu = true })
+            } else if (result is SearchResult.QuickCopy) {
+              Modifier.combinedClickable(onClick = onClick, onLongClick = { showMenu = true })
+            } else {
+              Modifier.clickable(onClick = onClick)
+            }
+          )
+          .padding(horizontal = 16.dp, vertical = 8.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Box(modifier = Modifier.size(40.dp)) {
+        if (result.icon != null) {
+          val iconModifier =
+            if (
+              result is SearchResult.Contact ||
+                result is SearchResult.QuickCopy ||
+                result is SearchResult.SearchIntent
+            ) {
               Modifier.size(40.dp).clip(RoundedCornerShape(8.dp))
-             } else {
+            } else {
               Modifier.size(40.dp)
-             }
-     val imageBitmap = result.icon?.toImageBitmap()
-     if (imageBitmap != null) {
-      Image(bitmap = imageBitmap, contentDescription = null, modifier = iconModifier)
-     }
-    }
+            }
+          val imageBitmap = result.icon?.toImageBitmap()
+          if (imageBitmap != null) {
+            Image(bitmap = imageBitmap, contentDescription = null, modifier = iconModifier)
+          }
+        }
 
-    if (result is SearchResult.Shortcut && result.appIcon != null) {
-     val appIconBitmap = result.appIcon.toImageBitmap()
-     if (appIconBitmap != null) {
-      Image(
+        if (result is SearchResult.Shortcut && result.appIcon != null) {
+          val appIconBitmap = result.appIcon.toImageBitmap()
+          if (appIconBitmap != null) {
+            Image(
               bitmap = appIconBitmap,
               contentDescription = null,
-              modifier = Modifier.size(16.dp).align(Alignment.TopStart)
-      )
-     }
+              modifier = Modifier.size(16.dp).align(Alignment.TopStart),
+            )
+          }
+        }
+      }
+
+      Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+        Text(
+          text = result.title,
+          fontSize = 16.sp,
+          fontWeight = FontWeight.Medium,
+          color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+      }
     }
-   }
 
-   Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
-    Text(
-            text = result.title,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-    )
-   }
-  }
-
-  if (showMenu) {
-   val context = LocalContext.current
-   DropdownMenu(
-           expanded = showMenu,
-           onDismissRequest = { showMenu = false },
-           modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant),
-           properties = PopupProperties(focusable = false)
-   ) {
-    if (result is SearchResult.QuickCopy) {
-     DropdownMenuItem(
-             text = { Text("Edit") },
-             onClick = {
+    if (showMenu) {
+      val context = LocalContext.current
+      DropdownMenu(
+        expanded = showMenu,
+        onDismissRequest = { showMenu = false },
+        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant),
+        properties = PopupProperties(focusable = false),
+      ) {
+        if (result is SearchResult.QuickCopy) {
+          DropdownMenuItem(
+            text = { Text("Edit") },
+            onClick = {
               onEditQuickCopy?.invoke()
               showMenu = false
-             },
-             leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
-     )
-     DropdownMenuItem(
-             text = { Text("Delete") },
-             onClick = {
+            },
+            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+          )
+          DropdownMenuItem(
+            text = { Text("Delete") },
+            onClick = {
               val app = context.applicationContext as com.searchlauncher.app.SearchLauncherApp
               CoroutineScope(Dispatchers.IO).launch {
-               app.quickCopyRepository.removeItem(result.alias)
+                app.quickCopyRepository.removeItem(result.alias)
               }
               showMenu = false
-             },
-             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) }
-     )
-     DropdownMenuItem(
-             text = { Text("Create New") },
-             onClick = {
+            },
+            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+          )
+          DropdownMenuItem(
+            text = { Text("Create New") },
+            onClick = {
               onCreateQuickCopy?.invoke()
               showMenu = false
-             },
-             leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) }
-     )
-    }
+            },
+            leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+          )
+        }
 
-    if (onToggleFavorite != null) {
-     DropdownMenuItem(
-             text = { Text(if (isFavorite) "Remove from Favorites" else "Add to Favorites") },
-             onClick = {
+        if (onToggleFavorite != null) {
+          DropdownMenuItem(
+            text = { Text(if (isFavorite) "Remove from Favorites" else "Add to Favorites") },
+            onClick = {
               onToggleFavorite()
               showMenu = false
-             },
-             leadingIcon = {
+            },
+            leadingIcon = {
               Icon(
-                      imageVector =
-                              if (isFavorite) {
-                               Icons.Default.Star
-                              } else {
-                               Icons.Default.StarBorder
-                              },
-                      contentDescription = null
+                imageVector =
+                  if (isFavorite) {
+                    Icons.Default.Star
+                  } else {
+                    Icons.Default.StarBorder
+                  },
+                contentDescription = null,
               )
-             }
-     )
-    }
+            },
+          )
+        }
 
-    if (result is SearchResult.App) {
-     DropdownMenuItem(
-             text = { Text("App Info") },
-             onClick = {
+        if (result is SearchResult.App) {
+          DropdownMenuItem(
+            text = { Text("App Info") },
+            onClick = {
               try {
-               val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-               intent.data = Uri.parse("package:${result.packageName}")
-               intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-               context.startActivity(intent)
+                val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                intent.data = Uri.parse("package:${result.packageName}")
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
               } catch (e: Exception) {
-               Toast.makeText(context, "Cannot open App Info", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Cannot open App Info", Toast.LENGTH_SHORT).show()
               }
               showMenu = false
-             },
-             leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) }
-     )
-     DropdownMenuItem(
-             text = { Text("Uninstall") },
-             onClick = {
+            },
+            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+          )
+          DropdownMenuItem(
+            text = { Text("Uninstall") },
+            onClick = {
               try {
-               val intent = Intent(Intent.ACTION_DELETE)
-               intent.data = Uri.parse("package:${result.packageName}")
-               intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-               context.startActivity(intent)
+                val intent = Intent(Intent.ACTION_DELETE)
+                intent.data = Uri.parse("package:${result.packageName}")
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
               } catch (e: Exception) {
-               Toast.makeText(context, "Cannot start uninstall", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Cannot start uninstall", Toast.LENGTH_SHORT).show()
               }
               showMenu = false
-             },
-             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) }
-     )
+            },
+            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+          )
+        }
+      }
     }
-   }
   }
- }
 }
