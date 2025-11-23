@@ -210,37 +210,6 @@ fun SearchScreen(
                                             } else {
                                                 GestureAccessibilityService.openQuickSettings()
                                             }
-
-                                    if (!success) {
-                                        // Show toast if service is not connected
-                                        // We need to run this on the main thread
-                                        // Since we are in a suspend function scope (pointerInput),
-                                        // we can't easily show Toast directly
-                                        // But we can't easily get context here inside the callback
-                                        // without some setup.
-                                        // Actually we have 'context' available in the composable.
-                                        // However, detectDragGestures is a suspend function but the
-                                        // callback is not.
-                                        // Let's just use the return value to trigger a side effect
-                                        // if possible,
-                                        // or just fire and forget, but the user requested a Toast
-                                        // if not enabled.
-
-                                        // Since we are inside a callback, we can't launch a
-                                        // coroutine directly without a scope.
-                                        // But we shouldn't block the UI thread.
-                                        // Let's use the scope defined above.
-                                        scope.launch(Dispatchers.Main) {
-                                            if (!GestureAccessibilityService.isConnected()) {
-                                                Toast.makeText(
-                                                                context,
-                                                                "Accessibility Service not enabled",
-                                                                Toast.LENGTH_SHORT
-                                                        )
-                                                        .show()
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }
