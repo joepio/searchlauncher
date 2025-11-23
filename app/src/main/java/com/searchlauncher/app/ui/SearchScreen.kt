@@ -144,11 +144,28 @@ fun SearchScreen(
 
   // Hint Logic
   val quickCopyItems by app.quickCopyRepository.items.collectAsState()
+
+  // Check if this app is the default launcher
+  val isDefaultLauncher = remember {
+    val intent = Intent(Intent.ACTION_MAIN)
+    intent.addCategory(Intent.CATEGORY_HOME)
+    val resolveInfo = context.packageManager.resolveActivity(intent, 0)
+    resolveInfo?.activityInfo?.packageName == context.packageName
+  }
+
+  // Check if contacts permission is granted
+  val hasContactsPermission = remember {
+    context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) ==
+      android.content.pm.PackageManager.PERMISSION_GRANTED
+  }
+
   val hintManager =
-    remember(folderImages, quickCopyItems) {
+    remember(folderImages, quickCopyItems, isDefaultLauncher, hasContactsPermission) {
       HintManager(
         isWallpaperFolderSet = { folderImages.isNotEmpty() },
         isQuickCopySet = { quickCopyItems.isNotEmpty() },
+        isDefaultLauncher = { isDefaultLauncher },
+        isContactsAccessGranted = { hasContactsPermission },
       )
     }
   var currentHint by remember { mutableStateOf("Search apps and content…") }

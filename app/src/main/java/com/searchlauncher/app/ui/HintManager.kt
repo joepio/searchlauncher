@@ -9,19 +9,23 @@ data class Hint(val text: String, val condition: () -> Boolean = { true })
 class HintManager(
   private val isWallpaperFolderSet: () -> Boolean,
   private val isQuickCopySet: () -> Boolean,
+  private val isDefaultLauncher: () -> Boolean,
+  private val isContactsAccessGranted: () -> Boolean,
 ) {
   private val hints =
     listOf(
       Hint("Search anything"),
+      Hint("This could be your home screen") { !isDefaultLauncher() },
       Hint("Set a folder with wallpapers and rotate wallpapers") { !isWallpaperFolderSet() },
+      Hint("Give access to contacts to search them") { !isContactsAccessGranted() },
       Hint("Type a phone number and call"),
       Hint("Type a website URL to open"),
       Hint("Swipe down left to open notifications"),
       Hint("Swipe down right to open quick settings"),
       Hint("Set custom snippets with QuickCopy") { !isQuickCopySet() },
-      Hint("Press 'y ' to search youtube"),
-      Hint("Press 'm ' to search maps"),
-      Hint("Press 'c ' to ask ChatGPT"),
+      Hint("Type 'y ' to search youtube"),
+      Hint("Type 'm ' to search maps"),
+      Hint("Type 'c ' to ask ChatGPT"),
     )
 
   fun getHintsFlow(): Flow<String> = flow {
