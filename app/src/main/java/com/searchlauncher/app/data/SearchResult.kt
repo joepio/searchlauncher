@@ -65,9 +65,9 @@ sealed class SearchResult {
     val photoUri: String?,
   ) : SearchResult()
 
-  data class QuickCopy(
+  data class Snippet(
     override val id: String,
-    override val namespace: String = "quickcopy",
+    override val namespace: String = "snippets",
     override val title: String,
     override val subtitle: String?,
     override val icon: Drawable?,

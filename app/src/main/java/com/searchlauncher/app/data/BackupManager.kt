@@ -15,7 +15,7 @@ import org.json.JSONObject
 
 class BackupManager(
   private val context: Context,
-  private val quickCopyRepository: QuickCopyRepository,
+  private val snippetsRepository: SnippetsRepository,
   private val searchShortcutRepository: SearchShortcutRepository,
   private val favoritesRepository: FavoritesRepository,
 ) {
@@ -30,15 +30,15 @@ class BackupManager(
         val backupData = JSONObject()
         backupData.put("version", BACKUP_VERSION)
 
-        // Export QuickCopy items
-        val quickCopyArray = JSONArray()
-        quickCopyRepository.items.value.forEach { item ->
+        // Export Snippets items
+        val snippetsArray = JSONArray()
+        snippetsRepository.items.value.forEach { item ->
           val obj = JSONObject()
           obj.put("alias", item.alias)
           obj.put("content", item.content)
-          quickCopyArray.put(obj)
+          snippetsArray.put(obj)
         }
-        backupData.put("quickCopy", quickCopyArray)
+        backupData.put("snippets", snippetsArray)
 
         // Export Search Shortcuts
         val shortcutsArray = JSONArray()
@@ -72,9 +72,9 @@ class BackupManager(
         outputStream.flush()
 
         val totalItems =
-          quickCopyRepository.items.value.size +
-            searchShortcutRepository.items.value.size +
-            favoritesRepository.getFavoriteIds().size
+          snippetsRepository.items.value.size +
+                  searchShortcutRepository.items.value.size +
+                  favoritesRepository.getFavoriteIds().size
 
         Result.success(totalItems)
       } catch (e: Exception) {
@@ -99,20 +99,26 @@ class BackupManager(
           )
         }
 
-        var quickCopyCount = 0
+        var snippetsCount = 0
         var shortcutsCount = 0
         var favoritesCount = 0
         var backgroundRestored = false
 
-        // Import QuickCopy items
-        if (backupData.has("quickCopy")) {
-          val quickCopyArray = backupData.getJSONArray("quickCopy")
-          for (i in 0 until quickCopyArray.length()) {
-            val obj = quickCopyArray.getJSONObject(i)
+        // Import Snippets items (support both old and new format)
+        val snippetsKey = when {
+          backupData.has("snippets") -> "snippets"
+          backupData.has("quickCopy") -> "quickCopy"
+          else -> null
+        }
+
+        if (snippetsKey != null) {
+          val snippetsArray = backupData.getJSONArray(snippetsKey)
+          for (i in 0 until snippetsArray.length()) {
+            val obj = snippetsArray.getJSONObject(i)
             val alias = obj.getString("alias")
             val content = obj.getString("content")
-            quickCopyRepository.addItem(alias, content)
-            quickCopyCount++
+            snippetsRepository.addItem(alias, content)
+            snippetsCount++
           }
         }
 
@@ -184,7 +190,7 @@ class BackupManager(
 
         Result.success(
           ImportStats(
-            quickCopyCount = quickCopyCount,
+            snippetsCount = snippetsCount,
             shortcutsCount = shortcutsCount,
             favoritesCount = favoritesCount,
             backgroundRestored = backgroundRestored,
@@ -228,7 +234,7 @@ class BackupManager(
   }
 
   data class ImportStats(
-    val quickCopyCount: Int,
+    val snippetsCount: Int,
     val shortcutsCount: Int,
     val favoritesCount: Int,
     val backgroundRestored: Boolean,

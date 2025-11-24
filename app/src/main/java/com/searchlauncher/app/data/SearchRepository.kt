@@ -329,7 +329,7 @@ class SearchRepository(private val context: Context) {
           .filter { resolveInfo ->
             val appInfo = resolveInfo.activityInfo.applicationInfo
             (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0 ||
-              (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+                    (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
           }
           .mapNotNull { resolveInfo ->
             try {
@@ -393,8 +393,8 @@ class SearchRepository(private val context: Context) {
           query.setPackage(packageName)
           query.setQueryFlags(
             android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
-              android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
-              android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
           )
 
           val shortcutList =
@@ -445,7 +445,7 @@ class SearchRepository(private val context: Context) {
       val session = appSearchSession ?: return@withContext
       if (
         context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) !=
-          android.content.pm.PackageManager.PERMISSION_GRANTED
+        android.content.pm.PackageManager.PERMISSION_GRANTED
       ) {
         return@withContext
       }
@@ -525,8 +525,8 @@ class SearchRepository(private val context: Context) {
       results.addAll(customShortcutResults)
       val filterCustomShortcuts = customShortcutResults.isNotEmpty()
 
-      // 2. QuickCopy Items
-      results.addAll(getQuickCopyResults(query))
+      // 2. Snippets
+      results.addAll(getSnippetResults(query))
 
       // 3. Smart Actions
       if (query.isNotEmpty()) {
@@ -564,8 +564,8 @@ class SearchRepository(private val context: Context) {
     // Ignore reserved triggers that are now handled by smart actions
     if (
       trigger.equals("call", ignoreCase = true) ||
-        trigger.equals("sms", ignoreCase = true) ||
-        trigger.equals("mailto", ignoreCase = true)
+      trigger.equals("sms", ignoreCase = true) ||
+      trigger.equals("mailto", ignoreCase = true)
     ) {
       return emptyList()
     }
@@ -610,12 +610,12 @@ class SearchRepository(private val context: Context) {
     return results
   }
 
-  private fun getQuickCopyResults(query: String): List<SearchResult> {
+  private fun getSnippetResults(query: String): List<SearchResult> {
     if (query.isEmpty()) return emptyList()
     val app = context.applicationContext as? SearchLauncherApp ?: return emptyList()
     val clipboardIcon = context.getDrawable(android.R.drawable.ic_menu_edit)
 
-    return app.quickCopyRepository.searchItems(query).map { item ->
+    return app.snippetsRepository.searchItems(query).map { item ->
       val aliasLower = item.alias.lowercase()
       val queryLower = query.lowercase()
 
@@ -627,9 +627,9 @@ class SearchRepository(private val context: Context) {
           else -> 40 // Content match
         }
 
-      SearchResult.QuickCopy(
-        id = "quickcopy_${item.alias}",
-        namespace = "quickcopy",
+      SearchResult.Snippet(
+        id = "snippet_${item.alias}",
+        namespace = "snippets",
         title = item.alias,
         subtitle = item.content.take(50) + if (item.content.length > 50) "..." else "",
         icon = clipboardIcon,
@@ -676,7 +676,7 @@ class SearchRepository(private val context: Context) {
           val baseScore = result.rankingSignal.toInt()
           val isSettings =
             doc.id == "com.android.settings" ||
-              doc.intentUri?.contains("android.settings.SETTINGS") == true
+                    doc.intentUri?.contains("android.settings.SETTINGS") == true
           val boost = if (isSettings) 15 else if (doc.namespace == "apps") 5 else 0
 
           val name = doc.name
@@ -778,7 +778,7 @@ class SearchRepository(private val context: Context) {
         try {
           val launcherApps =
             context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
-              as android.content.pm.LauncherApps
+                    as android.content.pm.LauncherApps
           val user = android.os.Process.myUserHandle()
           val q = android.content.pm.LauncherApps.ShortcutQuery()
           val packageName = doc.id.split("/").firstOrNull() ?: ""
@@ -787,8 +787,8 @@ class SearchRepository(private val context: Context) {
           q.setShortcutIds(listOf(shortcutId))
           q.setQueryFlags(
             android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
-              android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
-              android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
           )
           val shortcuts = launcherApps.getShortcuts(q, user)
           if (shortcuts != null && shortcuts.isNotEmpty()) {
@@ -822,6 +822,7 @@ class SearchRepository(private val context: Context) {
           rankingScore = rankingScore,
         )
       }
+
       "app_shortcuts" -> {
         val icon =
           when {
@@ -832,12 +833,15 @@ class SearchRepository(private val context: Context) {
                 null
               }
             }
+
             doc.intentUri?.contains("STILL_IMAGE_CAMERA") == true -> {
               context.getDrawable(android.R.drawable.ic_menu_camera)
             }
+
             doc.intentUri?.contains("VIDEO_CAMERA") == true -> {
               context.getDrawable(android.R.drawable.ic_menu_camera)
             }
+
             else -> null
           }
 
@@ -852,6 +856,7 @@ class SearchRepository(private val context: Context) {
           rankingScore = rankingScore,
         )
       }
+
       "search_shortcuts" -> {
         val alias = doc.description ?: ""
         val app = context.applicationContext as? SearchLauncherApp
@@ -868,6 +873,7 @@ class SearchRepository(private val context: Context) {
           rankingScore = rankingScore,
         )
       }
+
       "static_shortcuts" -> {
         var icon: Drawable? = null
         try {
@@ -876,7 +882,8 @@ class SearchRepository(private val context: Context) {
             val res = context.packageManager.getResourcesForApplication(pkg)
             icon = res.getDrawable(doc.iconResId.toInt(), null)
           }
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+        }
 
         val pkg = doc.id.split("/").firstOrNull() ?: ""
         val appIcon =
@@ -898,6 +905,7 @@ class SearchRepository(private val context: Context) {
           rankingScore = rankingScore,
         )
       }
+
       "contacts" -> {
         val lookupKey = doc.id.substringBefore("/")
         val contactId = doc.id.substringAfter("/").toLongOrNull() ?: 0L
@@ -933,6 +941,7 @@ class SearchRepository(private val context: Context) {
           photoUri = photoUri,
         )
       }
+
       else -> { // apps
         val packageName = doc.id
         val icon =

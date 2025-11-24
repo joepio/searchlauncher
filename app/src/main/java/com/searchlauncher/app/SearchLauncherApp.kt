@@ -6,7 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import com.searchlauncher.app.data.FavoritesRepository
-import com.searchlauncher.app.data.QuickCopyRepository
+import com.searchlauncher.app.data.SnippetsRepository
 import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.data.SearchShortcutRepository
 import kotlinx.coroutines.CoroutineScope
@@ -18,7 +18,7 @@ class SearchLauncherApp : Application() {
   lateinit var searchRepository: SearchRepository
     private set
 
-  lateinit var quickCopyRepository: QuickCopyRepository
+  lateinit var snippetsRepository: SnippetsRepository
     private set
 
   lateinit var favoritesRepository: FavoritesRepository
@@ -30,7 +30,7 @@ class SearchLauncherApp : Application() {
   override fun onCreate() {
     super.onCreate()
     searchRepository = SearchRepository(this)
-    quickCopyRepository = QuickCopyRepository(this)
+    snippetsRepository = SnippetsRepository(this)
     favoritesRepository = FavoritesRepository(this)
     searchShortcutRepository = com.searchlauncher.app.data.SearchShortcutRepository(this)
     CoroutineScope(Dispatchers.IO).launch { searchRepository.initialize() }
@@ -41,10 +41,10 @@ class SearchLauncherApp : Application() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       val channel =
         NotificationChannel(
-            NOTIFICATION_CHANNEL_ID,
-            "SearchLauncher Service",
-            NotificationManager.IMPORTANCE_LOW,
-          )
+          NOTIFICATION_CHANNEL_ID,
+          "SearchLauncher Service",
+          NotificationManager.IMPORTANCE_LOW,
+        )
           .apply {
             description = "Keeps SearchLauncher running in the background"
             setShowBadge(false)

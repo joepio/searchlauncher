@@ -7,7 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun QuickCopyDialog(
+fun SnippetDialog(
   initialAlias: String,
   initialContent: String,
   isEditMode: Boolean,
@@ -17,12 +17,13 @@ fun QuickCopyDialog(
   var alias by remember { mutableStateOf(initialAlias) }
   var content by remember { mutableStateOf(initialContent) }
   var aliasError by remember { mutableStateOf(false) }
+  var contentError by remember { mutableStateOf(false) }
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text(if (isEditMode) "Edit Quick Copy" else "New Quick Copy") },
+    title = { Text(if (isEditMode) "Edit Snippet" else "Add Snippet") },
     text = {
-      Column {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
           value = alias,
           onValueChange = {
@@ -30,39 +31,47 @@ fun QuickCopyDialog(
             aliasError = false
           },
           label = { Text("Alias") },
+          placeholder = { Text("e.g., 'bank', 'meet'") },
           isError = aliasError,
-          singleLine = true,
+          supportingText =
+            if (aliasError) {
+              { Text("Alias is required") }
+            } else null,
           modifier = Modifier.fillMaxWidth(),
+          singleLine = true,
         )
-        if (aliasError) {
-          Text(
-            text = "Alias cannot be empty",
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(start = 16.dp),
-          )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
           value = content,
-          onValueChange = { content = it },
+          onValueChange = {
+            content = it
+            contentError = false
+          },
           label = { Text("Content") },
+          placeholder = { Text("Text to copy when selected") },
+          isError = contentError,
+          supportingText =
+            if (contentError) {
+              { Text("Content is required") }
+            } else null,
           modifier = Modifier.fillMaxWidth(),
           minLines = 3,
+          maxLines = 5,
         )
       }
     },
     confirmButton = {
       TextButton(
         onClick = {
-          if (alias.isBlank()) {
-            aliasError = true
-          } else {
-            onConfirm(alias, content)
+          val trimmedAlias = alias.trim()
+          val trimmedContent = content.trim()
+          when {
+            trimmedAlias.isEmpty() -> aliasError = true
+            trimmedContent.isEmpty() -> contentError = true
+            else -> onConfirm(trimmedAlias, trimmedContent)
           }
         }
       ) {
-        Text("Save")
+        Text(if (isEditMode) "Update" else "Add")
       }
     },
     dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },

@@ -8,7 +8,7 @@ data class Hint(val text: String, val condition: () -> Boolean = { true })
 
 class HintManager(
   private val isWallpaperFolderSet: () -> Boolean,
-  private val isQuickCopySet: () -> Boolean,
+  private val isSnippetsSet: () -> Boolean,
   private val isDefaultLauncher: () -> Boolean,
   private val isContactsAccessGranted: () -> Boolean,
 ) {
@@ -22,7 +22,7 @@ class HintManager(
       Hint("Type a website URL to open"),
       Hint("Swipe down left to open notifications"),
       Hint("Swipe down right to open quick settings"),
-      Hint("Set custom snippets with QuickCopy") { !isQuickCopySet() },
+      Hint("Set custom snippets") { !isSnippetsSet() },
       Hint("Type 'y ' to search youtube"),
       Hint("Type 'm ' to search maps"),
       Hint("Type 'c ' to ask ChatGPT"),

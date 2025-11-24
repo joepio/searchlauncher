@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     window.setSoftInputMode(
       android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
-        android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+              android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
     )
 
     setContent {
@@ -148,9 +148,9 @@ class MainActivity : ComponentActivity() {
 
     // Hoist wallpaper state
     val backgroundFolderUriString by
-      context.dataStore.data
-        .map { it[PreferencesKeys.BACKGROUND_FOLDER_URI] }
-        .collectAsState(initial = null)
+    context.dataStore.data
+      .map { it[PreferencesKeys.BACKGROUND_FOLDER_URI] }
+      .collectAsState(initial = null)
     var folderImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
 
     LaunchedEffect(backgroundFolderUriString) {
@@ -178,9 +178,9 @@ class MainActivity : ComponentActivity() {
     }
 
     val lastImageUriString by
-      context.dataStore.data
-        .map { it[PreferencesKeys.BACKGROUND_LAST_IMAGE_URI] }
-        .collectAsState(initial = null)
+    context.dataStore.data
+      .map { it[PreferencesKeys.BACKGROUND_LAST_IMAGE_URI] }
+      .collectAsState(initial = null)
 
     val onboardingComplete =
       context.dataStore.data
@@ -239,6 +239,7 @@ class MainActivity : ComponentActivity() {
               lastImageUriString = lastImageUriString,
             )
           }
+
           Screen.Settings -> {
             HomeScreen(
               onStartService = { startOverlayService() },
@@ -248,6 +249,7 @@ class MainActivity : ComponentActivity() {
               onBack = { currentScreenState = Screen.Search },
             )
           }
+
           Screen.CustomShortcuts -> {
             CustomShortcutsScreen(onBack = { currentScreenState = Screen.Settings })
           }
@@ -472,10 +474,10 @@ fun HomeScreen(
           title = "Display Over Other Apps",
           granted =
             rememberPermissionState {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                  Settings.canDrawOverlays(context)
-                } else true
-              }
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Settings.canDrawOverlays(context)
+              } else true
+            }
               .value,
           onGrant = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -511,9 +513,9 @@ fun HomeScreen(
           title = "Contacts (Optional)",
           granted =
             rememberPermissionState {
-                context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) ==
-                  android.content.pm.PackageManager.PERMISSION_GRANTED
-              }
+              context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) ==
+                      android.content.pm.PackageManager.PERMISSION_GRANTED
+            }
               .value,
           onGrant = {
             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
@@ -526,10 +528,10 @@ fun HomeScreen(
           title = "Modify System Settings (Rotation)",
           granted =
             rememberPermissionState {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                  Settings.System.canWrite(context)
-                } else true
-              }
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Settings.System.canWrite(context)
+              } else true
+            }
               .value,
           onGrant = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -542,7 +544,7 @@ fun HomeScreen(
       }
     }
 
-    QuickCopyCard()
+    SnippetsCard()
 
     BackupRestoreCard()
 
@@ -561,10 +563,10 @@ fun HomeScreen(
               searchRepository.resetIndex()
               withContext(Dispatchers.Main) {
                 android.widget.Toast.makeText(
-                    context,
-                    "Search Index Reset",
-                    android.widget.Toast.LENGTH_SHORT,
-                  )
+                  context,
+                  "Search Index Reset",
+                  android.widget.Toast.LENGTH_SHORT,
+                )
                   .show()
               }
             }
@@ -700,14 +702,14 @@ fun hasUsageStatsPermission(context: Context): Boolean {
 }
 
 @Composable
-private fun QuickCopyCard() {
+private fun SnippetsCard() {
   val context = LocalContext.current
   val app = context.applicationContext as SearchLauncherApp
-  val quickCopyItems = app.quickCopyRepository.items.collectAsState()
+  val snippetItems = app.snippetsRepository.items.collectAsState()
   val scope = rememberCoroutineScope()
 
   var showDialog by remember { mutableStateOf(false) }
-  var editingItem by remember { mutableStateOf<com.searchlauncher.app.data.QuickCopyItem?>(null) }
+  var editingItem by remember { mutableStateOf<com.searchlauncher.app.data.SnippetItem?>(null) }
 
   Card(modifier = Modifier.fillMaxWidth()) {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -717,7 +719,7 @@ private fun QuickCopyCard() {
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Column(modifier = Modifier.weight(1f)) {
-          Text(text = "QuickCopy", style = MaterialTheme.typography.titleMedium)
+          Text(text = "Snippets", style = MaterialTheme.typography.titleMedium)
           Text(
             text = "Quick access to frequently used text snippets",
             style = MaterialTheme.typography.bodySmall,
@@ -735,15 +737,15 @@ private fun QuickCopyCard() {
       }
 
       // List existing items
-      if (quickCopyItems.value.isNotEmpty()) {
+      if (snippetItems.value.isNotEmpty()) {
         Text(
           text =
-            "${quickCopyItems.value.size} item${if (quickCopyItems.value.size != 1) "s" else ""}",
+            "${snippetItems.value.size} item${if (snippetItems.value.size != 1) "s" else ""}",
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        quickCopyItems.value.forEach { item ->
+        snippetItems.value.forEach { item ->
           Card(modifier = Modifier.fillMaxWidth()) {
             Row(
               modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -775,7 +777,7 @@ private fun QuickCopyCard() {
                   )
                 }
                 IconButton(
-                  onClick = { scope.launch { app.quickCopyRepository.removeItem(item.alias) } }
+                  onClick = { scope.launch { app.snippetsRepository.deleteItem(item.alias) } }
                 ) {
                   Icon(
                     imageVector = Icons.Default.Close,
@@ -792,15 +794,15 @@ private fun QuickCopyCard() {
   }
 
   if (showDialog) {
-    QuickCopyDialog(
+    SnippetDialog(
       item = editingItem,
       onDismiss = { showDialog = false },
       onSave = { alias, content ->
         scope.launch {
           if (editingItem != null) {
-            app.quickCopyRepository.updateItem(editingItem!!.alias, alias, content)
+            app.snippetsRepository.updateItem(editingItem!!.alias, alias, content)
           } else {
-            app.quickCopyRepository.addItem(alias, content)
+            app.snippetsRepository.addItem(alias, content)
           }
           showDialog = false
         }
@@ -810,8 +812,8 @@ private fun QuickCopyCard() {
 }
 
 @Composable
-private fun QuickCopyDialog(
-  item: com.searchlauncher.app.data.QuickCopyItem?,
+private fun SnippetDialog(
+  item: com.searchlauncher.app.data.SnippetItem?,
   onDismiss: () -> Unit,
   onSave: (String, String) -> Unit,
 ) {
@@ -820,7 +822,7 @@ private fun QuickCopyDialog(
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text(if (item != null) "Edit QuickCopy" else "Add QuickCopy") },
+    title = { Text(if (item != null) "Edit Snippet" else "Add Snippet") },
     text = {
       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
@@ -871,7 +873,7 @@ private fun BackupRestoreCard() {
       Text(text = "Backup & Restore", style = MaterialTheme.typography.titleMedium)
       Text(
         text =
-          "Export all your data (QuickCopy, Shortcuts, Favorites, Background) to a .searchlauncher file",
+          "Export all your data (Snippets, Shortcuts, Favorites, Background) to a .searchlauncher file",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
@@ -899,7 +901,7 @@ private suspend fun MainActivity.performExport(uri: android.net.Uri) {
       val backupManager =
         com.searchlauncher.app.data.BackupManager(
           context = this@performExport,
-          quickCopyRepository = app.quickCopyRepository,
+          snippetsRepository = app.snippetsRepository,
           searchShortcutRepository = app.searchShortcutRepository,
           favoritesRepository = app.favoritesRepository,
         )
@@ -909,17 +911,17 @@ private suspend fun MainActivity.performExport(uri: android.net.Uri) {
         withContext(Dispatchers.Main) {
           if (result.isSuccess) {
             android.widget.Toast.makeText(
-                this@performExport,
-                "Backup exported successfully (${result.getOrNull()} items)",
-                android.widget.Toast.LENGTH_LONG,
-              )
+              this@performExport,
+              "Backup exported successfully (${result.getOrNull()} items)",
+              android.widget.Toast.LENGTH_LONG,
+            )
               .show()
           } else {
             android.widget.Toast.makeText(
-                this@performExport,
-                "Export failed: ${result.exceptionOrNull()?.message}",
-                android.widget.Toast.LENGTH_LONG,
-              )
+              this@performExport,
+              "Export failed: ${result.exceptionOrNull()?.message}",
+              android.widget.Toast.LENGTH_LONG,
+            )
               .show()
           }
         }
@@ -927,10 +929,10 @@ private suspend fun MainActivity.performExport(uri: android.net.Uri) {
     } catch (e: Exception) {
       withContext(Dispatchers.Main) {
         android.widget.Toast.makeText(
-            this@performExport,
-            "Export failed: ${e.message}",
-            android.widget.Toast.LENGTH_LONG,
-          )
+          this@performExport,
+          "Export failed: ${e.message}",
+          android.widget.Toast.LENGTH_LONG,
+        )
           .show()
       }
     }
@@ -945,7 +947,7 @@ private suspend fun MainActivity.performImport(uri: android.net.Uri) {
       val backupManager =
         com.searchlauncher.app.data.BackupManager(
           context = this@performImport,
-          quickCopyRepository = app.quickCopyRepository,
+          snippetsRepository = app.snippetsRepository,
           searchShortcutRepository = app.searchShortcutRepository,
           favoritesRepository = app.favoritesRepository,
         )
@@ -957,7 +959,7 @@ private suspend fun MainActivity.performImport(uri: android.net.Uri) {
             val stats = result.getOrNull()!!
             val message = buildString {
               append("Import successful:\n")
-              append("- ${stats.quickCopyCount} QuickCopy items\n")
+              append("- ${stats.snippetsCount} Snippets\n")
               append("- ${stats.shortcutsCount} Custom Shortcuts\n")
               append("- ${stats.favoritesCount} Favorites")
               if (stats.backgroundRestored) {
@@ -965,17 +967,17 @@ private suspend fun MainActivity.performImport(uri: android.net.Uri) {
               }
             }
             android.widget.Toast.makeText(
-                this@performImport,
-                message,
-                android.widget.Toast.LENGTH_LONG,
-              )
+              this@performImport,
+              message,
+              android.widget.Toast.LENGTH_LONG,
+            )
               .show()
           } else {
             android.widget.Toast.makeText(
-                this@performImport,
-                "Import failed: ${result.exceptionOrNull()?.message}",
-                android.widget.Toast.LENGTH_LONG,
-              )
+              this@performImport,
+              "Import failed: ${result.exceptionOrNull()?.message}",
+              android.widget.Toast.LENGTH_LONG,
+            )
               .show()
           }
         }
@@ -983,10 +985,10 @@ private suspend fun MainActivity.performImport(uri: android.net.Uri) {
     } catch (e: Exception) {
       withContext(Dispatchers.Main) {
         android.widget.Toast.makeText(
-            this@performImport,
-            "Import failed: ${e.message}",
-            android.widget.Toast.LENGTH_LONG,
-          )
+          this@performImport,
+          "Import failed: ${e.message}",
+          android.widget.Toast.LENGTH_LONG,
+        )
           .show()
       }
     }

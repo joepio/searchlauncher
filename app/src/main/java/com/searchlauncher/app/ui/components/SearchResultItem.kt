@@ -40,8 +40,8 @@ fun SearchResultItem(
   result: SearchResult,
   isFavorite: Boolean = false,
   onToggleFavorite: (() -> Unit)? = null,
-  onEditQuickCopy: (() -> Unit)? = null,
-  onCreateQuickCopy: (() -> Unit)? = null,
+  onEditSnippet: (() -> Unit)? = null,
+  onCreateSnippet: (() -> Unit)? = null,
   onClick: () -> Unit,
 ) {
   var showMenu by remember { mutableStateOf(false) }
@@ -53,7 +53,7 @@ fun SearchResultItem(
           .then(
             if (onToggleFavorite != null) {
               Modifier.combinedClickable(onClick = onClick, onLongClick = { showMenu = true })
-            } else if (result is SearchResult.QuickCopy) {
+            } else if (result is SearchResult.Snippet) {
               Modifier.combinedClickable(onClick = onClick, onLongClick = { showMenu = true })
             } else {
               Modifier.clickable(onClick = onClick)
@@ -67,8 +67,8 @@ fun SearchResultItem(
           val iconModifier =
             if (
               result is SearchResult.Contact ||
-                result is SearchResult.QuickCopy ||
-                result is SearchResult.SearchIntent
+              result is SearchResult.Snippet ||
+              result is SearchResult.SearchIntent
             ) {
               Modifier.size(40.dp).clip(RoundedCornerShape(8.dp))
             } else {
@@ -112,11 +112,11 @@ fun SearchResultItem(
         modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant),
         properties = PopupProperties(focusable = false),
       ) {
-        if (result is SearchResult.QuickCopy) {
+        if (result is SearchResult.Snippet) {
           DropdownMenuItem(
             text = { Text("Edit") },
             onClick = {
-              onEditQuickCopy?.invoke()
+              onEditSnippet?.invoke()
               showMenu = false
             },
             leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
@@ -126,7 +126,7 @@ fun SearchResultItem(
             onClick = {
               val app = context.applicationContext as com.searchlauncher.app.SearchLauncherApp
               CoroutineScope(Dispatchers.IO).launch {
-                app.quickCopyRepository.removeItem(result.alias)
+                app.snippetsRepository.deleteItem(result.alias)
               }
               showMenu = false
             },
@@ -135,7 +135,7 @@ fun SearchResultItem(
           DropdownMenuItem(
             text = { Text("Create New") },
             onClick = {
-              onCreateQuickCopy?.invoke()
+              onCreateSnippet?.invoke()
               showMenu = false
             },
             leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },

@@ -154,9 +154,9 @@ object DefaultShortcuts {
         description = "Set as Launcher",
       ),
       AppShortcut.Action(
-        id = "create_quick_copy",
-        intentUri = "intent:#Intent;action=com.searchlauncher.action.CREATE_QUICK_COPY;end",
-        description = "Create QuickCopy snippet",
+        id = "create_snippet",
+        intentUri = "intent:#Intent;action=com.searchlauncher.action.CREATE_SNIPPET;end",
+        description = "Create snippet",
       ),
       AppShortcut.Action(
         id = "settings",

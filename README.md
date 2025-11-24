@@ -6,7 +6,7 @@ Android app that lets you search everything on your phone, and more.
 
 - **Search everything on your phone** - Apps, their shortcuts, device settings
 - **Search everything on the web** - Youtube, google, bing, maps, spotify... Or add your own custom shortcuts!
-- **QuickCopy** - Fast access to frequently used text snippets
+- **Snippets** - Fast access to frequently used text snippets
 - **Custom shortcuts** - Directly call actions from android using Intents (flashlight, rotation)
 - **Speed** - Lightweight, fast!
 - **Smart sorting** - Apps sorted by recent usage (with optional usage stats permission)
