@@ -18,6 +18,7 @@ import java.net.URL
 import java.util.Collections
 import java.util.concurrent.Executors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 
@@ -59,6 +60,15 @@ class SearchRepository(private val context: Context) {
           )
         appSearchSession = sessionFuture.get()
 
+        try {
+          val launcherApps =
+            context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
+              as android.content.pm.LauncherApps
+          launcherApps.registerCallback(launcherCallback)
+        } catch (e: Exception) {
+          e.printStackTrace()
+        }
+
         val setSchemaRequest =
           SetSchemaRequest.Builder().addDocumentClasses(AppSearchDocument::class.java).build()
         appSearchSession?.setSchemaAsync(setSchemaRequest)?.get()
@@ -68,6 +78,147 @@ class SearchRepository(private val context: Context) {
         indexStaticShortcuts()
         indexContacts()
         _isInitialized.value = true
+      } catch (e: Exception) {
+        e.printStackTrace()
+      }
+    }
+
+  // ... (indexCustomShortcuts, indexStaticShortcuts, resetIndex, getRecentItems,
+  // getSearchShortcuts, getFavorites, reportUsage omitted as they are unchanged) ...
+
+  private suspend fun indexApps() =
+    withContext(Dispatchers.IO) {
+      searchCache.clear() // Invalidate cache
+      val session = appSearchSession ?: return@withContext
+      val packageManager = context.packageManager
+      val intent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
+
+      val apps =
+        packageManager
+          .queryIntentActivities(intent, 0)
+          .filter { resolveInfo ->
+            val appInfo = resolveInfo.activityInfo.applicationInfo
+            (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0 ||
+              (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+          }
+          .mapNotNull { resolveInfo ->
+            try {
+              val appName = resolveInfo.loadLabel(packageManager).toString()
+              val packageName = resolveInfo.activityInfo.packageName
+
+              val category =
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                  val appInfo = resolveInfo.activityInfo.applicationInfo
+                  when (appInfo.category) {
+                    ApplicationInfo.CATEGORY_GAME -> "Game"
+                    ApplicationInfo.CATEGORY_AUDIO -> "Audio"
+                    ApplicationInfo.CATEGORY_VIDEO -> "Video"
+                    ApplicationInfo.CATEGORY_IMAGE -> "Image"
+                    ApplicationInfo.CATEGORY_SOCIAL -> "Social"
+                    ApplicationInfo.CATEGORY_NEWS -> "News"
+                    ApplicationInfo.CATEGORY_MAPS -> "Maps"
+                    ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Productivity"
+                    else -> "Application"
+                  }
+                } else {
+                  "Application"
+                }
+
+              AppSearchDocument(
+                namespace = "apps",
+                id = packageName,
+                name = appName,
+                score = 2,
+                description = category,
+              )
+            } catch (e: Exception) {
+              null
+            }
+          }
+
+      if (apps.isNotEmpty()) {
+        val putRequest = PutDocumentsRequest.Builder().addDocuments(apps).build()
+        session.putAsync(putRequest).get()
+        documentCache.addAll(apps)
+      }
+
+      try {
+        indexShortcuts()
+      } catch (e: Exception) {
+        e.printStackTrace()
+      }
+    }
+
+  suspend fun indexShortcuts() =
+    withContext(Dispatchers.IO) {
+      val session = appSearchSession ?: return@withContext
+      val launcherApps =
+        context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as android.content.pm.LauncherApps
+
+      val shortcuts = mutableListOf<AppSearchDocument>()
+
+      try {
+        // 1. Get all profiles (to support work profiles)
+        val profiles = launcherApps.profiles
+
+        for (profile in profiles) {
+          try {
+            // 2. Query for ALL shortcuts in the profile
+            val query = android.content.pm.LauncherApps.ShortcutQuery()
+            query.setQueryFlags(
+              android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
+                android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+            )
+
+            val shortcutList = launcherApps.getShortcuts(query, profile) ?: emptyList()
+
+            for (shortcut in shortcutList) {
+              try {
+                val intent =
+                  try {
+                    "shortcut://${shortcut.`package`}/${shortcut.id}"
+                  } catch (e: Exception) {
+                    continue
+                  }
+
+                val name = shortcut.shortLabel?.toString() ?: shortcut.longLabel?.toString() ?: ""
+
+                shortcuts.add(
+                  AppSearchDocument(
+                    namespace = "shortcuts",
+                    id = "${shortcut.`package`}/${shortcut.id}",
+                    name = name,
+                    score = 1,
+                    intentUri = intent,
+                    description = "Shortcut",
+                  )
+                )
+              } catch (e: Exception) {
+                // Ignore individual shortcut failures
+              }
+            }
+          } catch (e: Exception) {
+            android.util.Log.e(
+              "SearchRepository",
+              "Error querying shortcuts for profile $profile",
+              e,
+            )
+          }
+        }
+
+        if (shortcuts.isNotEmpty()) {
+          android.util.Log.d(
+            "SearchRepository",
+            "Attempting to put ${shortcuts.size} shortcuts into AppSearch",
+          )
+          val putRequest = PutDocumentsRequest.Builder().addDocuments(shortcuts).build()
+          session.putAsync(putRequest).get()
+          android.util.Log.d("SearchRepository", "Successfully put shortcuts into AppSearch")
+          documentCache.addAll(shortcuts)
+        } else {
+          android.util.Log.d("SearchRepository", "No shortcuts found to index")
+        }
       } catch (e: Exception) {
         e.printStackTrace()
       }
@@ -316,126 +467,44 @@ class SearchRepository(private val context: Context) {
       }
     }
 
-  private suspend fun indexApps() =
-    withContext(Dispatchers.IO) {
-      searchCache.clear() // Invalidate cache
-      val session = appSearchSession ?: return@withContext
-      val packageManager = context.packageManager
-      val intent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
+  private val scope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO)
 
-      val apps =
-        packageManager
-          .queryIntentActivities(intent, 0)
-          .filter { resolveInfo ->
-            val appInfo = resolveInfo.activityInfo.applicationInfo
-            (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0 ||
-                    (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-          }
-          .mapNotNull { resolveInfo ->
-            try {
-              val appName = resolveInfo.loadLabel(packageManager).toString()
-              val packageName = resolveInfo.activityInfo.packageName
-
-              val category =
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                  val appInfo = resolveInfo.activityInfo.applicationInfo
-                  when (appInfo.category) {
-                    ApplicationInfo.CATEGORY_GAME -> "Game"
-                    ApplicationInfo.CATEGORY_AUDIO -> "Audio"
-                    ApplicationInfo.CATEGORY_VIDEO -> "Video"
-                    ApplicationInfo.CATEGORY_IMAGE -> "Image"
-                    ApplicationInfo.CATEGORY_SOCIAL -> "Social"
-                    ApplicationInfo.CATEGORY_NEWS -> "News"
-                    ApplicationInfo.CATEGORY_MAPS -> "Maps"
-                    ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Productivity"
-                    else -> "Application"
-                  }
-                } else {
-                  "Application"
-                }
-
-              AppSearchDocument(
-                namespace = "apps",
-                id = packageName,
-                name = appName,
-                score = 2,
-                description = category,
-              )
-            } catch (e: Exception) {
-              null
-            }
-          }
-
-      if (apps.isNotEmpty()) {
-        val putRequest = PutDocumentsRequest.Builder().addDocuments(apps).build()
-        session.putAsync(putRequest).get()
-        documentCache.addAll(apps)
+  private val launcherCallback =
+    object : android.content.pm.LauncherApps.Callback() {
+      override fun onPackageRemoved(packageName: String, user: android.os.UserHandle) {
+        scope.launch { indexApps() }
       }
 
-      indexShortcuts()
-    }
+      override fun onPackageAdded(packageName: String, user: android.os.UserHandle) {
+        scope.launch { indexApps() }
+      }
 
-  suspend fun indexShortcuts() =
-    withContext(Dispatchers.IO) {
-      val session = appSearchSession ?: return@withContext
-      val launcherApps =
-        context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as android.content.pm.LauncherApps
+      override fun onPackageChanged(packageName: String, user: android.os.UserHandle) {
+        scope.launch { indexApps() }
+      }
 
-      val shortcuts = mutableListOf<AppSearchDocument>()
-      val user = android.os.Process.myUserHandle()
+      override fun onPackagesAvailable(
+        packageNames: Array<out String>?,
+        user: android.os.UserHandle,
+        replacing: Boolean,
+      ) {
+        scope.launch { indexApps() }
+      }
 
-      try {
-        val activities = launcherApps.getActivityList(null, user)
-        val packages = activities.map { it.componentName.packageName }.distinct()
+      override fun onPackagesUnavailable(
+        packageNames: Array<out String>?,
+        user: android.os.UserHandle,
+        replacing: Boolean,
+      ) {
+        scope.launch { indexApps() }
+      }
 
-        for (packageName in packages) {
-          val query = android.content.pm.LauncherApps.ShortcutQuery()
-          query.setPackage(packageName)
-          query.setQueryFlags(
-            android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
-                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
-                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
-          )
-
-          val shortcutList =
-            try {
-              launcherApps.getShortcuts(query, user) ?: emptyList()
-            } catch (e: Exception) {
-              emptyList()
-            }
-
-          for (shortcut in shortcutList) {
-            try {
-              val intent =
-                try {
-                  "shortcut://${shortcut.`package`}/${shortcut.id}"
-                } catch (e: Exception) {
-                  continue
-                }
-
-              shortcuts.add(
-                AppSearchDocument(
-                  namespace = "shortcuts",
-                  id = "${shortcut.`package`}/${shortcut.id}",
-                  name = shortcut.shortLabel?.toString() ?: shortcut.longLabel?.toString() ?: "",
-                  score = 1,
-                  intentUri = intent,
-                  description = "Shortcut",
-                )
-              )
-            } catch (e: Exception) {
-              // Ignore
-            }
-          }
-        }
-
-        if (shortcuts.isNotEmpty()) {
-          val putRequest = PutDocumentsRequest.Builder().addDocuments(shortcuts).build()
-          session.putAsync(putRequest).get()
-          documentCache.addAll(shortcuts)
-        }
-      } catch (e: Exception) {
-        e.printStackTrace()
+      override fun onShortcutsChanged(
+        packageName: String,
+        shortcuts: List<android.content.pm.ShortcutInfo>,
+        user: android.os.UserHandle,
+      ) {
+        scope.launch { indexShortcuts() }
       }
     }
 
@@ -445,7 +514,7 @@ class SearchRepository(private val context: Context) {
       val session = appSearchSession ?: return@withContext
       if (
         context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) !=
-        android.content.pm.PackageManager.PERMISSION_GRANTED
+          android.content.pm.PackageManager.PERMISSION_GRANTED
       ) {
         return@withContext
       }
@@ -564,8 +633,8 @@ class SearchRepository(private val context: Context) {
     // Ignore reserved triggers that are now handled by smart actions
     if (
       trigger.equals("call", ignoreCase = true) ||
-      trigger.equals("sms", ignoreCase = true) ||
-      trigger.equals("mailto", ignoreCase = true)
+        trigger.equals("sms", ignoreCase = true) ||
+        trigger.equals("mailto", ignoreCase = true)
     ) {
       return emptyList()
     }
@@ -676,7 +745,7 @@ class SearchRepository(private val context: Context) {
           val baseScore = result.rankingSignal.toInt()
           val isSettings =
             doc.id == "com.android.settings" ||
-                    doc.intentUri?.contains("android.settings.SETTINGS") == true
+              doc.intentUri?.contains("android.settings.SETTINGS") == true
           val boost = if (isSettings) 15 else if (doc.namespace == "apps") 5 else 0
 
           val name = doc.name
@@ -778,7 +847,7 @@ class SearchRepository(private val context: Context) {
         try {
           val launcherApps =
             context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
-                    as android.content.pm.LauncherApps
+              as android.content.pm.LauncherApps
           val user = android.os.Process.myUserHandle()
           val q = android.content.pm.LauncherApps.ShortcutQuery()
           val packageName = doc.id.split("/").firstOrNull() ?: ""
@@ -787,8 +856,8 @@ class SearchRepository(private val context: Context) {
           q.setShortcutIds(listOf(shortcutId))
           q.setQueryFlags(
             android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
-                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
-                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+              android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+              android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
           )
           val shortcuts = launcherApps.getShortcuts(q, user)
           if (shortcuts != null && shortcuts.isNotEmpty()) {
@@ -822,7 +891,6 @@ class SearchRepository(private val context: Context) {
           rankingScore = rankingScore,
         )
       }
-
       "app_shortcuts" -> {
         val icon =
           when {
@@ -833,15 +901,12 @@ class SearchRepository(private val context: Context) {
                 null
               }
             }
-
             doc.intentUri?.contains("STILL_IMAGE_CAMERA") == true -> {
               context.getDrawable(android.R.drawable.ic_menu_camera)
             }
-
             doc.intentUri?.contains("VIDEO_CAMERA") == true -> {
               context.getDrawable(android.R.drawable.ic_menu_camera)
             }
-
             else -> null
           }
 
@@ -856,7 +921,6 @@ class SearchRepository(private val context: Context) {
           rankingScore = rankingScore,
         )
       }
-
       "search_shortcuts" -> {
         val alias = doc.description ?: ""
         val app = context.applicationContext as? SearchLauncherApp
@@ -873,7 +937,6 @@ class SearchRepository(private val context: Context) {
           rankingScore = rankingScore,
         )
       }
-
       "static_shortcuts" -> {
         var icon: Drawable? = null
         try {
@@ -882,8 +945,7 @@ class SearchRepository(private val context: Context) {
             val res = context.packageManager.getResourcesForApplication(pkg)
             icon = res.getDrawable(doc.iconResId.toInt(), null)
           }
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) {}
 
         val pkg = doc.id.split("/").firstOrNull() ?: ""
         val appIcon =
@@ -905,7 +967,6 @@ class SearchRepository(private val context: Context) {
           rankingScore = rankingScore,
         )
       }
-
       "contacts" -> {
         val lookupKey = doc.id.substringBefore("/")
         val contactId = doc.id.substringAfter("/").toLongOrNull() ?: 0L
@@ -941,7 +1002,6 @@ class SearchRepository(private val context: Context) {
           photoUri = photoUri,
         )
       }
-
       else -> { // apps
         val packageName = doc.id
         val icon =

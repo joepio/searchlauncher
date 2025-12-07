@@ -73,8 +73,8 @@ class BackupManager(
 
         val totalItems =
           snippetsRepository.items.value.size +
-                  searchShortcutRepository.items.value.size +
-                  favoritesRepository.getFavoriteIds().size
+            searchShortcutRepository.items.value.size +
+            favoritesRepository.getFavoriteIds().size
 
         Result.success(totalItems)
       } catch (e: Exception) {
@@ -105,11 +105,12 @@ class BackupManager(
         var backgroundRestored = false
 
         // Import Snippets items (support both old and new format)
-        val snippetsKey = when {
-          backupData.has("snippets") -> "snippets"
-          backupData.has("quickCopy") -> "quickCopy"
-          else -> null
-        }
+        val snippetsKey =
+          when {
+            backupData.has("snippets") -> "snippets"
+            backupData.has("quickCopy") -> "quickCopy"
+            else -> null
+          }
 
         if (snippetsKey != null) {
           val snippetsArray = backupData.getJSONArray(snippetsKey)

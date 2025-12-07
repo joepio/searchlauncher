@@ -30,10 +30,6 @@ Android app that lets you search everything on your phone, and more.
 - **Overlay Service** - For gesture detection and floating UI
 - **Accessibility Service** - For system-wide gesture detection
 
-## Custom Shortcuts
-
-If you want
-
 ## Requirements
 
 - Android 10 (API 29) or higher

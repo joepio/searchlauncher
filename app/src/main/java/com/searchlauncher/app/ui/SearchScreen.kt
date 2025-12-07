@@ -51,8 +51,8 @@ import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.data.SearchResult
 import com.searchlauncher.app.service.GestureAccessibilityService
 import com.searchlauncher.app.ui.components.FavoritesRow
-import com.searchlauncher.app.ui.components.SnippetDialog
 import com.searchlauncher.app.ui.components.SearchResultItem
+import com.searchlauncher.app.ui.components.SnippetDialog
 import com.searchlauncher.app.ui.components.WallpaperBackground
 import com.searchlauncher.app.ui.theme.SearchLauncherTheme
 import com.searchlauncher.app.util.CustomActionHandler
@@ -156,7 +156,7 @@ fun SearchScreen(
   // Check if contacts permission is granted
   val hasContactsPermission = remember {
     context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
+      android.content.pm.PackageManager.PERMISSION_GRANTED
   }
 
   val hintManager =
@@ -173,17 +173,17 @@ fun SearchScreen(
   LaunchedEffect(hintManager) { hintManager.getHintsFlow().collect { hint -> currentHint = hint } }
 
   val themeColor by
-  context.dataStore.data
-    .map { it[MainActivity.PreferencesKeys.THEME_COLOR] ?: 0xFF00639B.toInt() }
-    .collectAsState(initial = 0xFF00639B.toInt())
+    context.dataStore.data
+      .map { it[MainActivity.PreferencesKeys.THEME_COLOR] ?: 0xFF00639B.toInt() }
+      .collectAsState(initial = 0xFF00639B.toInt())
   val themeSaturation by
-  context.dataStore.data
-    .map { it[MainActivity.PreferencesKeys.THEME_SATURATION] ?: 50f }
-    .collectAsState(initial = 50f)
+    context.dataStore.data
+      .map { it[MainActivity.PreferencesKeys.THEME_SATURATION] ?: 50f }
+      .collectAsState(initial = 50f)
   val darkMode by
-  context.dataStore.data
-    .map { it[MainActivity.PreferencesKeys.DARK_MODE] ?: 0 }
-    .collectAsState(initial = 0)
+    context.dataStore.data
+      .map { it[MainActivity.PreferencesKeys.DARK_MODE] ?: 0 }
+      .collectAsState(initial = 0)
 
   // Remember the max height of the IME observed so far
   var maxImeHeight by remember { mutableStateOf(0) }
@@ -280,8 +280,9 @@ fun SearchScreen(
                 reverseLayout = true,
                 contentPadding = PaddingValues(vertical = 8.dp),
               ) {
-                itemsIndexed(searchResults, key = { _, item -> "${item.namespace}/${item.id}" }) { index,
-                                                                                                   result ->
+                itemsIndexed(searchResults, key = { _, item -> "${item.namespace}/${item.id}" }) {
+                  index,
+                  result ->
                   SearchResultItem(
                     result = result,
                     isFavorite = favoriteIds.contains(result.id),
@@ -316,8 +317,8 @@ fun SearchScreen(
                         // from query context)
                         if (
                           query.isNotEmpty() &&
-                          !result.trigger.equals(query.trim(), ignoreCase = true) &&
-                          !result.title.contains(query.trim(), ignoreCase = true)
+                            !result.trigger.equals(query.trim(), ignoreCase = true) &&
+                            !result.title.contains(query.trim(), ignoreCase = true)
                         ) {
                           // Perform Search
                           val shortcut =
@@ -346,10 +347,10 @@ fun SearchScreen(
                               onDismiss()
                             } catch (e: Exception) {
                               Toast.makeText(
-                                context,
-                                "Cannot open: ${result.title}",
-                                Toast.LENGTH_SHORT,
-                              )
+                                  context,
+                                  "Cannot open: ${result.title}",
+                                  Toast.LENGTH_SHORT,
+                                )
                                 .show()
                             }
                           }
@@ -360,8 +361,8 @@ fun SearchScreen(
                       } else {
                         if (
                           result is SearchResult.Content &&
-                          result.deepLink ==
-                          "intent:#Intent;action=com.searchlauncher.action.CREATE_SNIPPET;end"
+                            result.deepLink ==
+                              "intent:#Intent;action=com.searchlauncher.action.CREATE_SNIPPET;end"
                         ) {
                           snippetEditMode = false
                           showSnippetDialog = true
@@ -452,8 +453,8 @@ fun SearchScreen(
                 Modifier.weight(1f).focusRequester(focusRequester).onKeyEvent { event ->
                   if (
                     event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DEL &&
-                    displayQuery.isEmpty() &&
-                    activeShortcut != null
+                      displayQuery.isEmpty() &&
+                      activeShortcut != null
                   ) {
                     onQueryChange("")
                     true
@@ -505,10 +506,10 @@ fun SearchScreen(
                               onDismiss()
                             } catch (e: Exception) {
                               Toast.makeText(
-                                context,
-                                "Cannot open: ${topResult.title}",
-                                Toast.LENGTH_SHORT,
-                              )
+                                  context,
+                                  "Cannot open: ${topResult.title}",
+                                  Toast.LENGTH_SHORT,
+                                )
                                 .show()
                             }
                           } else {
@@ -612,7 +613,6 @@ private fun launchResult(
         context.startActivity(it)
       }
     }
-
     is SearchResult.Content -> {
       result.deepLink?.let { deepLink ->
         try {
@@ -642,7 +642,6 @@ private fun launchResult(
         }
       }
     }
-
     is SearchResult.Shortcut -> {
       try {
         val uri = result.intentUri
@@ -653,7 +652,7 @@ private fun launchResult(
             val id = parts[1]
             val launcherApps =
               context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
-                      as android.content.pm.LauncherApps
+                as android.content.pm.LauncherApps
             launcherApps.startShortcut(pkg, id, null, null, android.os.Process.myUserHandle())
           }
         } else {
@@ -666,11 +665,9 @@ private fun launchResult(
         Toast.makeText(context, "Error launching shortcut", Toast.LENGTH_SHORT).show()
       }
     }
-
     is SearchResult.SearchIntent -> {
       // Handled in UI
     }
-
     is SearchResult.Contact -> {
       try {
         val intent = Intent(Intent.ACTION_VIEW)
@@ -687,7 +684,6 @@ private fun launchResult(
         Toast.makeText(context, "Error opening contact", Toast.LENGTH_SHORT).show()
       }
     }
-
     is SearchResult.Snippet -> {
       val clipboard =
         context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
