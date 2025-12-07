@@ -67,8 +67,8 @@ fun SearchResultItem(
           val iconModifier =
             if (
               result is SearchResult.Contact ||
-              result is SearchResult.Snippet ||
-              result is SearchResult.SearchIntent
+                result is SearchResult.Snippet ||
+                result is SearchResult.SearchIntent
             ) {
               Modifier.size(40.dp).clip(RoundedCornerShape(8.dp))
             } else {

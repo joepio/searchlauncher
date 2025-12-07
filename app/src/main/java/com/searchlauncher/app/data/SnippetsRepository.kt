@@ -26,9 +26,7 @@ class SnippetsRepository(context: Context) {
       val items = mutableListOf<SnippetItem>()
       for (i in 0 until jsonArray.length()) {
         val obj = jsonArray.getJSONObject(i)
-        items.add(
-          SnippetItem(alias = obj.getString("alias"), content = obj.getString("content"))
-        )
+        items.add(SnippetItem(alias = obj.getString("alias"), content = obj.getString("content")))
       }
       _items.value = items.sortedBy { it.alias.lowercase() }
     } catch (e: Exception) {
@@ -83,8 +81,7 @@ class SnippetsRepository(context: Context) {
     if (query.isEmpty()) return _items.value
     val lowerQuery = query.lowercase()
     return _items.value.filter { item ->
-      item.alias.lowercase().contains(lowerQuery) ||
-              item.content.lowercase().contains(lowerQuery)
+      item.alias.lowercase().contains(lowerQuery) || item.content.lowercase().contains(lowerQuery)
     }
   }
 }

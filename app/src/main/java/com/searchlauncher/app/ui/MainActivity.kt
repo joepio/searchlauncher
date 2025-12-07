@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     window.setSoftInputMode(
       android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
-              android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+        android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
     )
 
     setContent {
@@ -148,9 +148,9 @@ class MainActivity : ComponentActivity() {
 
     // Hoist wallpaper state
     val backgroundFolderUriString by
-    context.dataStore.data
-      .map { it[PreferencesKeys.BACKGROUND_FOLDER_URI] }
-      .collectAsState(initial = null)
+      context.dataStore.data
+        .map { it[PreferencesKeys.BACKGROUND_FOLDER_URI] }
+        .collectAsState(initial = null)
     var folderImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
 
     LaunchedEffect(backgroundFolderUriString) {
@@ -178,9 +178,9 @@ class MainActivity : ComponentActivity() {
     }
 
     val lastImageUriString by
-    context.dataStore.data
-      .map { it[PreferencesKeys.BACKGROUND_LAST_IMAGE_URI] }
-      .collectAsState(initial = null)
+      context.dataStore.data
+        .map { it[PreferencesKeys.BACKGROUND_LAST_IMAGE_URI] }
+        .collectAsState(initial = null)
 
     val onboardingComplete =
       context.dataStore.data
@@ -239,7 +239,6 @@ class MainActivity : ComponentActivity() {
               lastImageUriString = lastImageUriString,
             )
           }
-
           Screen.Settings -> {
             HomeScreen(
               onStartService = { startOverlayService() },
@@ -249,7 +248,6 @@ class MainActivity : ComponentActivity() {
               onBack = { currentScreenState = Screen.Search },
             )
           }
-
           Screen.CustomShortcuts -> {
             CustomShortcutsScreen(onBack = { currentScreenState = Screen.Settings })
           }
@@ -474,10 +472,10 @@ fun HomeScreen(
           title = "Display Over Other Apps",
           granted =
             rememberPermissionState {
-              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                Settings.canDrawOverlays(context)
-              } else true
-            }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                  Settings.canDrawOverlays(context)
+                } else true
+              }
               .value,
           onGrant = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -513,9 +511,9 @@ fun HomeScreen(
           title = "Contacts (Optional)",
           granted =
             rememberPermissionState {
-              context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) ==
-                      android.content.pm.PackageManager.PERMISSION_GRANTED
-            }
+                context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) ==
+                  android.content.pm.PackageManager.PERMISSION_GRANTED
+              }
               .value,
           onGrant = {
             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
@@ -528,10 +526,10 @@ fun HomeScreen(
           title = "Modify System Settings (Rotation)",
           granted =
             rememberPermissionState {
-              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                Settings.System.canWrite(context)
-              } else true
-            }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                  Settings.System.canWrite(context)
+                } else true
+              }
               .value,
           onGrant = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -563,10 +561,10 @@ fun HomeScreen(
               searchRepository.resetIndex()
               withContext(Dispatchers.Main) {
                 android.widget.Toast.makeText(
-                  context,
-                  "Search Index Reset",
-                  android.widget.Toast.LENGTH_SHORT,
-                )
+                    context,
+                    "Search Index Reset",
+                    android.widget.Toast.LENGTH_SHORT,
+                  )
                   .show()
               }
             }
@@ -739,8 +737,7 @@ private fun SnippetsCard() {
       // List existing items
       if (snippetItems.value.isNotEmpty()) {
         Text(
-          text =
-            "${snippetItems.value.size} item${if (snippetItems.value.size != 1) "s" else ""}",
+          text = "${snippetItems.value.size} item${if (snippetItems.value.size != 1) "s" else ""}",
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -911,17 +908,17 @@ private suspend fun MainActivity.performExport(uri: android.net.Uri) {
         withContext(Dispatchers.Main) {
           if (result.isSuccess) {
             android.widget.Toast.makeText(
-              this@performExport,
-              "Backup exported successfully (${result.getOrNull()} items)",
-              android.widget.Toast.LENGTH_LONG,
-            )
+                this@performExport,
+                "Backup exported successfully (${result.getOrNull()} items)",
+                android.widget.Toast.LENGTH_LONG,
+              )
               .show()
           } else {
             android.widget.Toast.makeText(
-              this@performExport,
-              "Export failed: ${result.exceptionOrNull()?.message}",
-              android.widget.Toast.LENGTH_LONG,
-            )
+                this@performExport,
+                "Export failed: ${result.exceptionOrNull()?.message}",
+                android.widget.Toast.LENGTH_LONG,
+              )
               .show()
           }
         }
@@ -929,10 +926,10 @@ private suspend fun MainActivity.performExport(uri: android.net.Uri) {
     } catch (e: Exception) {
       withContext(Dispatchers.Main) {
         android.widget.Toast.makeText(
-          this@performExport,
-          "Export failed: ${e.message}",
-          android.widget.Toast.LENGTH_LONG,
-        )
+            this@performExport,
+            "Export failed: ${e.message}",
+            android.widget.Toast.LENGTH_LONG,
+          )
           .show()
       }
     }
@@ -967,17 +964,17 @@ private suspend fun MainActivity.performImport(uri: android.net.Uri) {
               }
             }
             android.widget.Toast.makeText(
-              this@performImport,
-              message,
-              android.widget.Toast.LENGTH_LONG,
-            )
+                this@performImport,
+                message,
+                android.widget.Toast.LENGTH_LONG,
+              )
               .show()
           } else {
             android.widget.Toast.makeText(
-              this@performImport,
-              "Import failed: ${result.exceptionOrNull()?.message}",
-              android.widget.Toast.LENGTH_LONG,
-            )
+                this@performImport,
+                "Import failed: ${result.exceptionOrNull()?.message}",
+                android.widget.Toast.LENGTH_LONG,
+              )
               .show()
           }
         }
@@ -985,10 +982,10 @@ private suspend fun MainActivity.performImport(uri: android.net.Uri) {
     } catch (e: Exception) {
       withContext(Dispatchers.Main) {
         android.widget.Toast.makeText(
-          this@performImport,
-          "Import failed: ${e.message}",
-          android.widget.Toast.LENGTH_LONG,
-        )
+            this@performImport,
+            "Import failed: ${e.message}",
+            android.widget.Toast.LENGTH_LONG,
+          )
           .show()
       }
     }

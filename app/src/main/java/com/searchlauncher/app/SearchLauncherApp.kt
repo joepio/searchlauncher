@@ -6,9 +6,9 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import com.searchlauncher.app.data.FavoritesRepository
-import com.searchlauncher.app.data.SnippetsRepository
 import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.data.SearchShortcutRepository
+import com.searchlauncher.app.data.SnippetsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,10 +41,10 @@ class SearchLauncherApp : Application() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       val channel =
         NotificationChannel(
-          NOTIFICATION_CHANNEL_ID,
-          "SearchLauncher Service",
-          NotificationManager.IMPORTANCE_LOW,
-        )
+            NOTIFICATION_CHANNEL_ID,
+            "SearchLauncher Service",
+            NotificationManager.IMPORTANCE_LOW,
+          )
           .apply {
             description = "Keeps SearchLauncher running in the background"
             setShowBadge(false)
