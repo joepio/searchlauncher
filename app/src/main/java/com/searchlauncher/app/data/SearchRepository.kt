@@ -51,6 +51,9 @@ class SearchRepository(private val context: Context) {
   private val _isInitialized = kotlinx.coroutines.flow.MutableStateFlow(false)
   val isInitialized: kotlinx.coroutines.flow.StateFlow<Boolean> = _isInitialized
 
+  private val _indexUpdated = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(replay = 1)
+  val indexUpdated: kotlinx.coroutines.flow.SharedFlow<Unit> = _indexUpdated
+
   suspend fun initialize() =
     withContext(Dispatchers.IO) {
       try {
@@ -138,7 +141,11 @@ class SearchRepository(private val context: Context) {
 
       if (apps.isNotEmpty()) {
         val putRequest = PutDocumentsRequest.Builder().addDocuments(apps).build()
-        session.putAsync(putRequest).get()
+        try {
+          session.putAsync(putRequest).get()
+        } catch (e: Exception) {
+          android.util.Log.e("SearchRepository", "Failed to index apps", e)
+        }
         documentCache.addAll(apps)
       }
 
@@ -147,6 +154,7 @@ class SearchRepository(private val context: Context) {
       } catch (e: Exception) {
         e.printStackTrace()
       }
+      _indexUpdated.emit(Unit)
     }
 
   suspend fun indexShortcuts() =
@@ -208,20 +216,14 @@ class SearchRepository(private val context: Context) {
         }
 
         if (shortcuts.isNotEmpty()) {
-          android.util.Log.d(
-            "SearchRepository",
-            "Attempting to put ${shortcuts.size} shortcuts into AppSearch",
-          )
           val putRequest = PutDocumentsRequest.Builder().addDocuments(shortcuts).build()
           session.putAsync(putRequest).get()
-          android.util.Log.d("SearchRepository", "Successfully put shortcuts into AppSearch")
           documentCache.addAll(shortcuts)
-        } else {
-          android.util.Log.d("SearchRepository", "No shortcuts found to index")
         }
       } catch (e: Exception) {
         e.printStackTrace()
       }
+      _indexUpdated.emit(Unit)
     }
 
   suspend fun indexCustomShortcuts() =
@@ -373,11 +375,6 @@ class SearchRepository(private val context: Context) {
             documentCache.filter { it.namespace == "search_shortcuts" }
           }
 
-        android.util.Log.d(
-          "SearchRepository",
-          "Found ${searchShortcuts.size} search shortcuts in cache",
-        )
-
         // Try to get usage data from AppSearch to sort them
         val session = appSearchSession
         if (session != null) {
@@ -397,8 +394,6 @@ class SearchRepository(private val context: Context) {
             // Build a map of document ID to usage count
             val usageMap =
               page.associate { result -> result.genericDocument.id to result.rankingSignal }
-
-            android.util.Log.d("SearchRepository", "Got usage data for ${usageMap.size} shortcuts")
 
             // Sort by usage, with unused items at the end
             return@withContext searchShortcuts

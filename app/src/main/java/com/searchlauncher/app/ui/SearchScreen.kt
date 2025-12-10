@@ -83,6 +83,7 @@ fun SearchScreen(
   val focusRequester = remember { FocusRequester() }
   val favoriteIds by app.favoritesRepository.favoriteIds.collectAsState()
   val isSearchInitialized by searchRepository.isInitialized.collectAsState(initial = false)
+  val indexUpdateTrigger by searchRepository.indexUpdated.collectAsState(initial = Unit)
 
   var favorites by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
   var showSnippetDialog by remember { mutableStateOf(false) }
@@ -108,7 +109,7 @@ fun SearchScreen(
     }
   }
 
-  LaunchedEffect(query, showHistory, favoriteIds) {
+  LaunchedEffect(query, showHistory, favoriteIds, indexUpdateTrigger) {
     if (query.isEmpty()) {
       searchResults =
         if (showHistory) {
