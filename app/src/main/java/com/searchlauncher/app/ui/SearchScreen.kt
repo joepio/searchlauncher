@@ -143,6 +143,16 @@ fun SearchScreen(
     }
   }
 
+  // Pre-emptive cache warming when idle
+  LaunchedEffect(query) {
+    if (query.isEmpty()) {
+      // Wait for 2 seconds of idleness (user just staring at screen)
+      kotlinx.coroutines.delay(2000)
+      // Start warming up the cache
+      searchRepository.warmupCache()
+    }
+  }
+
   // Hint Logic
   val snippetItems by app.snippetsRepository.items.collectAsState()
 

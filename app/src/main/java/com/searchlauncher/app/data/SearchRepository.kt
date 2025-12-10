@@ -18,6 +18,7 @@ import java.net.URL
 import java.util.Collections
 import java.util.concurrent.Executors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -500,6 +501,25 @@ class SearchRepository(private val context: Context) {
         user: android.os.UserHandle,
       ) {
         scope.launch { indexShortcuts() }
+      }
+    }
+
+  suspend fun warmupCache() =
+    withContext(Dispatchers.IO) {
+      if (!_isInitialized.value) return@withContext
+
+      // Pre-warm cache for single letters/digits
+      val chars = "abcdefghijklmnopqrstuvwxyz0123456789".toCharArray()
+      for (char in chars) {
+        if (!isActive) break
+
+        // Skip if already cached
+        val key = char.toString()
+        if (!searchCache.containsKey(key)) {
+          searchApps(key)
+          // Small delay to be unobtrusive
+          kotlinx.coroutines.delay(50)
+        }
       }
     }
 
