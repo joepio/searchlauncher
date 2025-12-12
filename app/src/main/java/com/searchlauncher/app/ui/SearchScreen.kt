@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
 import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.data.SearchResult
 import com.searchlauncher.app.service.GestureAccessibilityService
@@ -201,39 +200,26 @@ fun SearchScreen(
     remember { context.dataStore.data.map { it[MainActivity.PreferencesKeys.DARK_MODE] ?: 0 } }
       .collectAsState(initial = 0)
 
-  // Remember the max height of the IME observed so far
-  var maxImeHeight by remember { mutableStateOf(0) }
-  val imeHeight = WindowInsets.ime.getBottom(LocalDensity.current)
-
-  // Update max height if current IME is taller (e.g. first load or different keyboard)
-  if (imeHeight > maxImeHeight) {
-    maxImeHeight = imeHeight
-  }
-
-  // Use the max known height for padding to prevent jank,
-  // unless the keyboard is actually closed (height 0 or very small),
-  // but here we assume we want it "always visible" style or at least reserved space.
-  // However, to be safe, we'll use the larger of the two: current or max.
-  // Ideally, we persist this in DataStore, but for now, session memory.
-  // To persist across sessions, we'd need to pass a callback or use DataStore here.
-  // For this request "stored / persisted / remembered", we should probably save it.
-
-  // Let's read/write to DataStore for persistence
+  // Use SharedPreferences for synchronous read to avoid initial jump
+  val sharedPrefs = remember { context.getSharedPreferences("window_prefs", Context.MODE_PRIVATE) }
   val density = LocalDensity.current
   val imeHeightPx = WindowInsets.ime.getBottom(density)
-  val storedKeyboardHeight =
-    remember { context.dataStore.data.map { it[intPreferencesKey("keyboard_height")] ?: 0 } }
-      .collectAsState(initial = 0)
+
+  // Read synchronously for initial value
+  var storedKeyboardHeight by remember { mutableStateOf(sharedPrefs.getInt("keyboard_height", 0)) }
 
   LaunchedEffect(imeHeightPx) {
-    if (imeHeightPx > storedKeyboardHeight.value) {
-      context.dataStore.edit { prefs -> prefs[intPreferencesKey("keyboard_height")] = imeHeightPx }
+    if (imeHeightPx > 100) {
+      // Wait for animation to settle (debounce)
+      kotlinx.coroutines.delay(300)
+      // If we are still active (didn't get cancelled by new value), save it
+      storedKeyboardHeight = imeHeightPx
+      sharedPrefs.edit().putInt("keyboard_height", imeHeightPx).apply()
     }
   }
 
   // The effective padding is the max of current IME or stored IME height
-  val bottomPadding =
-    with(density) { kotlin.math.max(imeHeightPx, storedKeyboardHeight.value).toDp() }
+  val bottomPadding = with(density) { kotlin.math.max(imeHeightPx, storedKeyboardHeight).toDp() }
 
   SearchLauncherTheme(themeColor = themeColor, darkThemeMode = darkMode, chroma = themeSaturation) {
     Box(
