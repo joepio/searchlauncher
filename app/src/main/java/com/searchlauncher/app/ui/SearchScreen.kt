@@ -12,10 +12,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -45,7 +44,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
 import androidx.datastore.preferences.core.edit
 import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.data.SearchResult
@@ -74,6 +72,8 @@ fun SearchScreen(
   showBackgroundImage: Boolean = false,
   folderImages: List<Uri> = emptyList(),
   lastImageUriString: String? = null,
+  onAddWidget: () -> Unit = {},
+  isActive: Boolean = true,
 ) {
   var searchResults by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
   var isLoading by remember { mutableStateOf(false) }
@@ -106,15 +106,24 @@ fun SearchScreen(
   }
 
   val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-  val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-
-  LaunchedEffect(focusTrigger, isImeVisible) {
-    focusRequester.requestFocus()
-    if (!isImeVisible) {
+  val isImeVisible =
+    WindowInsets.ime.getBottom(LocalDensity.current) >
+      0 // Monitor IME visibility and force show if it hides while we are active
+  LaunchedEffect(isImeVisible, isActive) {
+    if (isActive && !isImeVisible) {
+      // If keyboard dismissed, bring it back
+      focusRequester.requestFocus()
       keyboardController?.show()
     }
   }
 
+  // Ensure keyboard is open when this screen is active or refocused
+  LaunchedEffect(isActive, focusTrigger) {
+    if (isActive) {
+      focusRequester.requestFocus()
+      keyboardController?.show()
+    }
+  }
   // Wait for the search repository to be initialized before loading favorites.
   // This prevents a race condition where we try to query the index before it's ready.
   LaunchedEffect(favoriteIds, isSearchInitialized) {
@@ -305,65 +314,89 @@ fun SearchScreen(
       var showBackgroundMenu by remember { mutableStateOf(false) }
       var menuOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
-      Box(
-        modifier =
-          Modifier.fillMaxSize().pointerInput(Unit) {
-            detectTapGestures(
-              onLongPress = { offset: androidx.compose.ui.geometry.Offset ->
-                menuOffset = offset
-                showBackgroundMenu = true
-              },
-              onTap = { onDismiss() },
-            )
-          }
-      ) {
+      Box(modifier = Modifier.fillMaxSize()) {
         WallpaperBackground(
           showBackgroundImage = showBackgroundImage,
           bottomPadding = bottomPadding,
           folderImages = folderImages,
           lastImageUriString = lastImageUriString,
           modifier = Modifier.fillMaxSize(),
+          onOpenAppDrawer = onOpenAppDrawer,
+          onLongPress = { offset ->
+            menuOffset = offset
+            showBackgroundMenu = true
+          },
+          onTap = { onDismiss() },
         )
+      }
 
-        if (showBackgroundMenu) {
-          DropdownMenu(
-            expanded = showBackgroundMenu,
-            onDismissRequest = { showBackgroundMenu = false },
-            offset =
-              androidx.compose.ui.unit.DpOffset(
-                x = with(LocalDensity.current) { menuOffset.x.toDp() },
-                y = with(LocalDensity.current) { menuOffset.y.toDp() },
-              ),
-          ) {
+      if (showBackgroundMenu) {
+        DropdownMenu(
+          expanded = showBackgroundMenu,
+          onDismissRequest = { showBackgroundMenu = false },
+          offset =
+            androidx.compose.ui.unit.DpOffset(
+              x = with(LocalDensity.current) { menuOffset.x.toDp() },
+              y = with(LocalDensity.current) { menuOffset.y.toDp() },
+            ),
+        ) {
+          DropdownMenuItem(
+            text = { Text("Set Image") },
+            onClick = {
+              showBackgroundMenu = false
+              launcher.launch(arrayOf("image/*"))
+            },
+          )
+          DropdownMenuItem(
+            text = { Text("Set Folder") },
+            onClick = {
+              showBackgroundMenu = false
+              folderLauncher.launch(null)
+            },
+          )
+          DropdownMenuItem(
+            text = { Text("Add Widget") },
+            onClick = {
+              showBackgroundMenu = false
+              onAddWidget()
+            },
+          )
+          val widgets by app.widgetRepository.widgets.collectAsState(initial = emptyList())
+          if (widgets.isNotEmpty()) {
             DropdownMenuItem(
-              text = { Text("Set Image") },
+              text = { Text("Clear Widgets") },
               onClick = {
                 showBackgroundMenu = false
-                launcher.launch(arrayOf("image/*"))
-              },
-            )
-            DropdownMenuItem(
-              text = { Text("Set Folder") },
-              onClick = {
-                showBackgroundMenu = false
-                folderLauncher.launch(null)
-              },
-            )
-            if (backgroundUriString != null || backgroundFolderUriString != null) {
-              DropdownMenuItem(
-                text = { Text("Use default") },
-                onClick = {
-                  showBackgroundMenu = false
-                  scope.launch {
-                    context.dataStore.edit { preferences ->
-                      preferences.remove(MainActivity.PreferencesKeys.BACKGROUND_URI)
-                      preferences.remove(MainActivity.PreferencesKeys.BACKGROUND_FOLDER_URI)
-                      preferences.remove(MainActivity.PreferencesKeys.BACKGROUND_LAST_IMAGE_URI)
-                    }
+                val idsToClear = widgets.map { it.id } // Copy list of IDs
+                scope.launch {
+                  // Remove from Repo
+                  app.widgetRepository.clearAllWidgets()
+
+                  // Remove from Host
+                  val activity = context as? com.searchlauncher.app.ui.MainActivity
+                  activity?.let { act ->
+                    idsToClear.forEach { id -> act.appWidgetHost.deleteAppWidgetId(id) }
                   }
-                },
-              )
-            }
+                  Toast.makeText(context, "Widgets cleared", Toast.LENGTH_SHORT).show()
+                }
+              },
+              leadingIcon = { Icon(imageVector = Icons.Default.Delete, contentDescription = null) },
+            )
+          }
+          if (backgroundUriString != null || backgroundFolderUriString != null) {
+            DropdownMenuItem(
+              text = { Text("Use default backgrounds") },
+              onClick = {
+                showBackgroundMenu = false
+                scope.launch {
+                  context.dataStore.edit { preferences ->
+                    preferences.remove(MainActivity.PreferencesKeys.BACKGROUND_URI)
+                    preferences.remove(MainActivity.PreferencesKeys.BACKGROUND_FOLDER_URI)
+                    preferences.remove(MainActivity.PreferencesKeys.BACKGROUND_LAST_IMAGE_URI)
+                  }
+                }
+              },
+            )
           }
         }
       }
@@ -491,9 +524,31 @@ fun SearchScreen(
                         ) {
                           snippetEditMode = false
                           showSnippetDialog = true
+                        } else if (
+                          result is SearchResult.Content &&
+                            result.deepLink ==
+                              "intent:#Intent;action=com.searchlauncher.action.ADD_WIDGET;end"
+                        ) {
+                          onAddWidget()
                         } else {
-                          launchResult(context, result, searchRepository, scope, query, index == 0)
-                          onDismiss()
+                          launchResult(
+                            context,
+                            result,
+                            searchRepository,
+                            scope,
+                            query,
+                            index == 0,
+                            onQueryChange,
+                          )
+                          if (
+                            result is SearchResult.Content &&
+                              result.deepLink ==
+                                "intent:#Intent;action=com.searchlauncher.action.APPEND_SPACE;end"
+                          ) {
+                            // Do nothing (keep search open)
+                          } else {
+                            onDismiss()
+                          }
                         }
                       }
                     },
@@ -510,7 +565,7 @@ fun SearchScreen(
           FavoritesRow(
             favorites = favorites,
             onLaunch = { result ->
-              launchResult(context, result, searchRepository, scope)
+              launchResult(context, result, searchRepository, scope, onQueryChange = onQueryChange)
               onDismiss()
             },
             onRemoveFavorite = { result -> app.favoritesRepository.toggleFavorite(result.id) },
@@ -537,25 +592,48 @@ fun SearchScreen(
           ) {
             val activeShortcut =
               remember(query) {
-                app.searchShortcutRepository.items.value.find {
-                  query.startsWith("${it.alias} ", ignoreCase = true)
+                var shortcut =
+                  app.searchShortcutRepository.items.value.find {
+                    query.startsWith("${it.alias} ", ignoreCase = true)
+                  }
+                if (shortcut == null) {
+                  shortcut =
+                    com.searchlauncher.app.data.DefaultShortcuts.searchShortcuts.find {
+                      query.startsWith("${it.alias} ", ignoreCase = true)
+                    }
                 }
+                shortcut
               }
 
             if (activeShortcut != null) {
-              val iconDrawable =
-                remember(activeShortcut) {
-                  searchRepository.getColoredSearchIcon(activeShortcut.color, activeShortcut.alias)
+              Surface(
+                color = androidx.compose.ui.graphics.Color(activeShortcut.color ?: 0xFF808080),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.padding(end = 8.dp),
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                  val defaultShortcut =
+                    com.searchlauncher.app.data.DefaultShortcuts.searchShortcuts.find {
+                      it.alias == activeShortcut.alias
+                    }
+                  val label =
+                    (activeShortcut.shortLabel
+                        ?: defaultShortcut?.shortLabel
+                        ?: activeShortcut.description)
+                      .replace("Search ", "", ignoreCase = true)
+                      .replace("Ask ", "", ignoreCase = true)
+                      .trim()
+                  Text(
+                    text = label,
+                    color = androidx.compose.ui.graphics.Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                  )
                 }
-
-              if (iconDrawable != null) {
-                Image(
-                  bitmap = iconDrawable.toBitmap().asImageBitmap(),
-                  contentDescription = null,
-                  modifier = Modifier.size(24.dp),
-                )
               }
-              Spacer(modifier = Modifier.width(8.dp))
             }
 
             val displayQuery =
@@ -565,9 +643,31 @@ fun SearchScreen(
                 query
               }
 
+            var textFieldValue by remember {
+              mutableStateOf(
+                androidx.compose.ui.text.input.TextFieldValue(
+                  text = displayQuery,
+                  selection = androidx.compose.ui.text.TextRange(displayQuery.length),
+                )
+              )
+            }
+
+            // Update TextFieldValue when displayQuery changes externally (e.g. from "Add Widget")
+            LaunchedEffect(displayQuery) {
+              if (textFieldValue.text != displayQuery) {
+                textFieldValue =
+                  textFieldValue.copy(
+                    text = displayQuery,
+                    selection = androidx.compose.ui.text.TextRange(displayQuery.length),
+                  )
+              }
+            }
+
             BasicTextField(
-              value = displayQuery,
-              onValueChange = { newText ->
+              value = textFieldValue,
+              onValueChange = { newValue ->
+                textFieldValue = newValue
+                val newText = newValue.text
                 if (activeShortcut != null) {
                   onQueryChange("${activeShortcut.alias} $newText")
                 } else {
@@ -649,7 +749,13 @@ fun SearchScreen(
                           onQueryChange(topResult.trigger + " ")
                         }
                       } else {
-                        launchResult(context, topResult, searchRepository, scope)
+                        launchResult(
+                          context,
+                          topResult,
+                          searchRepository,
+                          scope,
+                          onQueryChange = onQueryChange,
+                        )
                         onDismiss()
                       }
                     }
@@ -687,11 +793,16 @@ fun SearchScreen(
                   imageVector = Icons.Default.Close,
                   contentDescription = "Clear",
                   modifier = Modifier.size(16.dp),
+                  tint = MaterialTheme.colorScheme.onSurface,
                 )
               }
             } else {
               IconButton(onClick = onOpenSettings, modifier = Modifier.size(32.dp).padding(4.dp)) {
-                Icon(imageVector = Icons.Default.Settings, contentDescription = "Settings")
+                Icon(
+                  imageVector = Icons.Default.Settings,
+                  contentDescription = "Settings",
+                  tint = MaterialTheme.colorScheme.onSurface,
+                )
               }
             }
           }
@@ -729,6 +840,7 @@ private fun launchResult(
   scope: kotlinx.coroutines.CoroutineScope,
   query: String = "",
   wasFirstResult: Boolean = false,
+  onQueryChange: ((String) -> Unit)? = null,
 ) {
   when (result) {
     is SearchResult.App -> {
@@ -748,7 +860,19 @@ private fun launchResult(
               Intent(Intent.ACTION_VIEW, Uri.parse(deepLink))
             }
 
-          if (intent.action == "com.searchlauncher.RESET_INDEX") {
+          if (intent.action == "com.searchlauncher.action.BIND_WIDGET") {
+            (context as? MainActivity)?.handleWidgetIntent(intent)
+              ?: run {
+                Toast.makeText(
+                    context,
+                    "Cannot bind widget: Activity not found",
+                    Toast.LENGTH_SHORT,
+                  )
+                  .show()
+              }
+          } else if (intent.action == "com.searchlauncher.action.APPEND_SPACE") {
+            onQueryChange?.invoke(query + " ")
+          } else if (intent.action == "com.searchlauncher.RESET_INDEX") {
             scope.launch {
               searchRepository.resetIndex()
               withContext(Dispatchers.Main) {

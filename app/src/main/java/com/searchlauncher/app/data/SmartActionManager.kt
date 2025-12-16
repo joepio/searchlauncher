@@ -135,6 +135,8 @@ class SmartActionManager(private val context: Context) {
       )
     }
 
+    // Widget logic moved to Shortcuts.kt
+
     return results
   }
 }

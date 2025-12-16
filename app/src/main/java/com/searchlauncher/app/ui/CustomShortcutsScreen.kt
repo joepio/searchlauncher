@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -138,11 +140,14 @@ fun CustomShortcutsScreen(onBack: () -> Unit) {
   if (showDialog) {
     ShortcutDialog(
       shortcut = editingShortcut,
+      existingAliases =
+        shortcuts.map { it.alias } +
+          com.searchlauncher.app.data.DefaultShortcuts.searchShortcuts.map { it.alias },
       onDismiss = { showDialog = false },
       onSave = { newShortcut ->
         scope.launch {
           if (editingShortcut != null) {
-            app.searchShortcutRepository.updateAlias(newShortcut.id, newShortcut.alias)
+            app.searchShortcutRepository.updateShortcut(newShortcut)
           } else {
             app.searchShortcutRepository.addShortcut(newShortcut)
           }
@@ -183,6 +188,7 @@ fun ShortcutItem(shortcut: SearchShortcut, onClick: () -> Unit) {
 @Composable
 fun ShortcutDialog(
   shortcut: SearchShortcut?,
+  existingAliases: List<String>,
   onDismiss: () -> Unit,
   onSave: (SearchShortcut) -> Unit,
 ) {
@@ -190,60 +196,76 @@ fun ShortcutDialog(
   var alias by remember { mutableStateOf(shortcut?.alias ?: "") }
   var urlTemplate by remember { mutableStateOf(shortcut?.urlTemplate ?: "") }
   var description by remember { mutableStateOf(shortcut?.description ?: "") }
+  var shortLabel by remember { mutableStateOf(shortcut?.shortLabel ?: "") }
   var colorHex by remember {
     mutableStateOf((shortcut?.color ?: 0xFF000000).toString(16).padStart(8, '0'))
   }
+  var error by remember { mutableStateOf<String?>(null) }
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text(if (shortcut != null) "Edit Alias" else "New Search Shortcut") },
+    title = { Text(if (shortcut != null) "Edit Shortcut" else "New Search Shortcut") },
     text = {
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (shortcut != null) {
-          Text(
-            text = "Edit the alias/trigger for this search shortcut",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-          OutlinedTextField(
-            value = alias,
-            onValueChange = { alias = it },
-            label = { Text("Alias (e.g., 'r', 'yt')") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-          )
-        } else {
-          OutlinedTextField(
-            value = description,
-            onValueChange = { description = it },
-            label = { Text("Description") },
-            modifier = Modifier.fillMaxWidth(),
-          )
-          OutlinedTextField(
-            value = alias,
-            onValueChange = { alias = it },
-            label = { Text("Alias (e.g., 'r', 'yt')") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-          )
-          OutlinedTextField(
-            value = urlTemplate,
-            onValueChange = { urlTemplate = it },
-            label = { Text("URL Template (use %s for query)") },
-            modifier = Modifier.fillMaxWidth(),
-          )
-          OutlinedTextField(
-            value = colorHex,
-            onValueChange = { colorHex = it },
-            label = { Text("Color (Hex, e.g., FF4285F4)") },
-            modifier = Modifier.fillMaxWidth(),
-          )
-        }
+      Column(
+        modifier = Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        OutlinedTextField(
+          value = description,
+          onValueChange = { description = it },
+          label = { Text("Description (e.g. YouTube Search)") },
+          modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+          value = shortLabel,
+          onValueChange = { shortLabel = it },
+          label = { Text("Preview Name (e.g. YouTube)") },
+          placeholder = { Text("Shown in chip") },
+          modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+          value = alias,
+          onValueChange = {
+            alias = it
+            error = null
+          },
+          label = { Text("Alias (e.g., 'r', 'yt')") },
+          modifier = Modifier.fillMaxWidth(),
+          singleLine = true,
+          isError = error != null,
+          supportingText = {
+            if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
+          },
+        )
+        OutlinedTextField(
+          value = urlTemplate,
+          onValueChange = { urlTemplate = it },
+          label = { Text("URL Template (use %s for query)") },
+          modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+          value = colorHex,
+          onValueChange = { colorHex = it },
+          label = { Text("Color (Hex, e.g., FF4285F4)") },
+          modifier = Modifier.fillMaxWidth(),
+        )
       }
     },
     confirmButton = {
       Button(
         onClick = {
+          if (alias.isBlank()) {
+            error = "Alias cannot be empty"
+            return@Button
+          }
+          if (
+            existingAliases.any { it.equals(alias, ignoreCase = true) } &&
+              alias.equals(shortcut?.alias, ignoreCase = true).not()
+          ) {
+            error = "Alias '$alias' is already in use"
+            return@Button
+          }
+
           val color =
             try {
               colorHex.toLong(16)
@@ -258,6 +280,7 @@ fun ShortcutDialog(
               urlTemplate = urlTemplate,
               description = description,
               color = color,
+              shortLabel = shortLabel.takeIf { it.isNotBlank() },
               suggestionUrl = shortcut?.suggestionUrl,
               packageName = shortcut?.packageName,
             )

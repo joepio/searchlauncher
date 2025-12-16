@@ -101,6 +101,8 @@
                 android:resource="@xml/search_widget_info" />
         </receiver>
 
+
+
     </application>
 
 </manifest>

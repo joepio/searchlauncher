@@ -101,6 +101,15 @@ fun SearchResultItem(
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
         )
+        if (!result.subtitle.isNullOrBlank()) {
+          Text(
+            text = result.subtitle!!,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+          )
+        }
       }
     }
 

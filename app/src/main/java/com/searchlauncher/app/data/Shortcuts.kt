@@ -9,6 +9,7 @@ data class SearchShortcut(
   val packageName: String? = null,
   val suggestionUrl: String? = null,
   val color: Long? = null,
+  val shortLabel: String? = null,
 )
 
 /** App-defined shortcuts that are not user-editable */
@@ -123,6 +124,11 @@ object DefaultShortcuts {
         description = "Reset App Data",
       ),
       AppShortcut.Action(
+        id = "add_widget",
+        intentUri = "intent:#Intent;action=com.searchlauncher.action.ADD_WIDGET;end",
+        description = "Add Widget",
+      ),
+      AppShortcut.Action(
         id = "toggle_flashlight",
         intentUri = "intent:#Intent;action=com.searchlauncher.action.TOGGLE_FLASHLIGHT;end",
         description = "Toggle Flashlight",
@@ -176,6 +182,7 @@ object DefaultShortcuts {
         description = "Google Search",
         suggestionUrl = "http://suggestqueries.google.com/complete/search?client=firefox&q=%s",
         color = 0xFF4285F4,
+        shortLabel = "Google",
       ),
       SearchShortcut(
         id = "duckduckgo",
@@ -184,6 +191,7 @@ object DefaultShortcuts {
         description = "DuckDuckGo Search",
         suggestionUrl = "https://ac.duckduckgo.com/ac/?q=%s&type=list",
         color = 0xFFDE5833,
+        shortLabel = "DuckDuckGo",
       ),
       SearchShortcut(
         id = "bing",
@@ -192,6 +200,7 @@ object DefaultShortcuts {
         description = "Bing Search",
         suggestionUrl = "https://api.bing.com/osjson.aspx?query=%s",
         color = 0xFF008373,
+        shortLabel = "Bing",
       ),
       SearchShortcut(
         id = "calendar",
@@ -200,6 +209,7 @@ object DefaultShortcuts {
           "intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=%s;end",
         description = "Add Calendar Item",
         color = 0xFF3F51B5,
+        shortLabel = "Calendar",
       ),
       SearchShortcut(
         id = "youtube",
@@ -209,6 +219,7 @@ object DefaultShortcuts {
         suggestionUrl =
           "http://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=%s",
         color = 0xFFFF0000,
+        shortLabel = "YouTube",
       ),
       SearchShortcut(
         id = "navigate",
@@ -216,6 +227,7 @@ object DefaultShortcuts {
         urlTemplate = "geo:0,0?q=%s",
         description = "Navigate to",
         color = 0xFF009688,
+        shortLabel = "Navigate",
       ),
       SearchShortcut(
         id = "maps",
@@ -223,6 +235,7 @@ object DefaultShortcuts {
         urlTemplate = "https://www.google.com/maps/search/%s",
         description = "Google Maps Search",
         color = 0xFF34A853,
+        shortLabel = "Maps",
       ),
       SearchShortcut(
         id = "reddit",
@@ -230,6 +243,7 @@ object DefaultShortcuts {
         urlTemplate = "https://www.reddit.com/search/?q=%s",
         description = "Reddit Search",
         color = 0xFFFF4500,
+        shortLabel = "Reddit",
       ),
       SearchShortcut(
         id = "wikipedia",
@@ -237,6 +251,7 @@ object DefaultShortcuts {
         urlTemplate = "https://en.wikipedia.org/w/index.php?search=%s",
         description = "Wikipedia Search",
         color = 0xFF808080,
+        shortLabel = "Wikipedia",
       ),
       SearchShortcut(
         id = "chatgpt_ask",
@@ -244,6 +259,7 @@ object DefaultShortcuts {
         urlTemplate = "https://chatgpt.com/?q=%s",
         description = "Ask ChatGPT",
         color = 0xFF10A37F,
+        shortLabel = "ChatGPT",
       ),
       SearchShortcut(
         id = "playstore",
@@ -251,6 +267,7 @@ object DefaultShortcuts {
         urlTemplate = "market://search?q=%s",
         description = "Play Store Search",
         color = 0xFF01875F,
+        shortLabel = "Play Store",
       ),
       SearchShortcut(
         id = "spotify",
@@ -259,6 +276,15 @@ object DefaultShortcuts {
         description = "Spotify Search",
         packageName = "com.spotify.music",
         color = 0xFF1DB954,
+        shortLabel = "Spotify",
+      ),
+      SearchShortcut(
+        id = "widget_search",
+        alias = "widgets",
+        urlTemplate = "internal://widget?q=%s", // custom interceptor logic
+        description = "Search Widgets",
+        color = 0xFFFF9800, // Orange
+        shortLabel = "Widgets",
       ),
     )
 }

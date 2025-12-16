@@ -639,7 +639,21 @@ class SearchRepository(private val context: Context) {
       }
 
       // 4. AppSearch Index
-      results.addAll(searchAppIndex(query, filterCustomShortcuts, limit))
+      // Identify active shortcut aliases to exclude them from index results (deduplication)
+      val excludedAliases =
+        customShortcutResults
+          .filterIsInstance<SearchResult.Content>()
+          .mapNotNull { result ->
+            // Extract alias from ID "shortcut_alias" or just use logic if accessible
+            // Actually, findMatchingCustomShortcut uses 'shortcut.alias'.
+            // We can infer it or simply rely on the fact that if we have a match,
+            // we likely want to exclude THAT specific alias from results.
+            // But result.id is "shortcut_y", and doc.description is "y".
+            result.id.removePrefix("shortcut_")
+          }
+          .toSet()
+
+      results.addAll(searchAppIndex(query, excludedAliases, limit))
 
       results.sortByDescending { it.rankingScore }
 
@@ -656,15 +670,24 @@ class SearchRepository(private val context: Context) {
 
   private fun findMatchingCustomShortcut(query: String): List<SearchResult> {
     if (query.isEmpty()) return emptyList()
-    val parts = query.split(" ", limit = 2)
-    if (parts.size < 2) return emptyList()
 
+    val parts = query.split(" ", limit = 2)
     val trigger = parts[0]
-    val searchTerm = parts[1]
+    val searchTerm = if (parts.size > 1) parts[1] else ""
+
     val app = context.applicationContext as? SearchLauncherApp ?: return emptyList()
     val shortcuts = app.searchShortcutRepository.items.value
-    val shortcut =
-      shortcuts.find { it.alias.equals(trigger, ignoreCase = true) } ?: return emptyList()
+    var shortcut = shortcuts.find { it.alias.equals(trigger, ignoreCase = true) }
+
+    if (shortcut == null) {
+      // Fallback to defaults (e.g. for widgets shortcut if not in DB yet)
+      shortcut =
+        com.searchlauncher.app.data.DefaultShortcuts.searchShortcuts.find {
+          it.alias.equals(trigger, ignoreCase = true)
+        }
+    }
+
+    if (shortcut == null) return emptyList()
 
     // Ignore reserved triggers that are now handled by smart actions
     if (
@@ -675,20 +698,83 @@ class SearchRepository(private val context: Context) {
       return emptyList()
     }
 
+    // Special handling for Widget Search
+    if (shortcut.id == "widget_search") {
+      val appWidgetManager =
+        context.getSystemService(Context.APPWIDGET_SERVICE) as android.appwidget.AppWidgetManager
+      val installedProviders = appWidgetManager.installedProviders
+
+      val matchingWidgets =
+        if (searchTerm.isBlank()) {
+          installedProviders
+        } else {
+          installedProviders.filter {
+            it.loadLabel(context.packageManager).contains(searchTerm, ignoreCase = true) ||
+              it.provider.packageName.contains(searchTerm, ignoreCase = true)
+          }
+        }
+
+      return matchingWidgets.map { info ->
+        val widgetLabel = info.loadLabel(context.packageManager)
+        val providerName = info.provider.flattenToString()
+        val widgetIcon =
+          info.loadIcon(
+            context,
+            0,
+          ) // Load icon (can be heavy on main thread? This function is suspect)
+        // ideally we should load icon async or cache it, but let's try direct first since this is
+        // background thread (withContext(Dispatchers.IO) calls searchApps)
+        // Actually findMatchingCustomShortcut is called from searchApps which is IO. So it is fine.
+
+        SearchResult.Content(
+          id = "widget_${providerName}",
+          namespace = "widgets",
+          title = widgetLabel,
+          subtitle = "${info.minWidth}x${info.minHeight} dp",
+          icon = widgetIcon,
+          packageName = info.provider.packageName,
+          deepLink =
+            "intent:#Intent;action=com.searchlauncher.action.BIND_WIDGET;S.component=$providerName;end",
+          rankingScore = 200,
+        )
+      }
+    }
+
     val results = mutableListOf<SearchResult>()
     val icon = iconGenerator.getColoredSearchIcon(shortcut.color, shortcut.alias)
 
     val url = String.format(shortcut.urlTemplate, java.net.URLEncoder.encode(searchTerm, "UTF-8"))
+
+    // Determine UX based on match type
+    val isExactMatch = parts.size == 1 // e.g. "y"
+    val subtitle =
+      if (isExactMatch) {
+        "Press Space to search"
+      } else if (searchTerm.isBlank()) {
+        "Type your query..."
+      } else {
+        "Search Shortcut"
+      }
+
+    val deepLink =
+      if (searchTerm.isBlank()) {
+        "intent:#Intent;action=com.searchlauncher.action.APPEND_SPACE;end"
+      } else {
+        url // Normal behavior: open URL
+      }
+
     results.add(
       SearchResult.Content(
         id = "shortcut_${shortcut.alias}",
         namespace = "search_shortcuts",
-        title = "${shortcut.description}: $searchTerm",
-        subtitle = "Search Shortcut",
+        title =
+          if (searchTerm.isBlank()) shortcut.description
+          else "${shortcut.description}: $searchTerm",
+        subtitle = subtitle,
         icon = icon,
         packageName = shortcut.packageName ?: "android",
-        deepLink = url,
-        rankingScore = 200,
+        deepLink = deepLink, // Use custom deepLink
+        rankingScore = 150,
       )
     )
 
@@ -747,7 +833,7 @@ class SearchRepository(private val context: Context) {
 
   private suspend fun searchAppIndex(
     query: String,
-    filterCustomShortcuts: Boolean,
+    excludedAliases: Set<String>,
     limit: Int,
   ): List<SearchResult> {
     val session = appSearchSession ?: return emptyList()
@@ -759,15 +845,14 @@ class SearchRepository(private val context: Context) {
           .setRankingStrategy(SearchSpec.RANKING_STRATEGY_USAGE_COUNT)
           .setTermMatch(SearchSpec.TERM_MATCH_PREFIX)
 
-      if (filterCustomShortcuts) {
-        searchSpecBuilder.addFilterNamespaces("apps", "shortcuts")
-      }
+      // We no longer strictly exclude namespace, because we want fallbacks.
+      // We will filter by alias ID later.
 
       // Optimization: For short queries, limit scope to apps only
       if (query.length < 3) {
-        // Restrict to "apps", "app_shortcuts", and "search_shortcuts" to
-        // avoid
-        // expensive contact lookups/large result sets
+        // Include search_shortcuts so we can show them even for short queries if needed,
+        // or if we want fallbacks. But standard logic allows search_shortcuts.
+        // Just list namespaces explicitly to avoid expensive contacts if short.
         searchSpecBuilder.addFilterNamespaces("apps", "app_shortcuts", "search_shortcuts")
       }
 
@@ -797,7 +882,25 @@ class SearchRepository(private val context: Context) {
             matchBoost = 20 // Partial match
           }
 
-          appSearchResults.add(convertDocumentToResult(doc, baseScore + boost + matchBoost))
+          val result = convertDocumentToResult(doc, baseScore + boost + matchBoost)
+
+          // Deduplication: If this is a search shortcut and its alias matches an active one, skip
+          // it.
+          if (result is SearchResult.SearchIntent && result.trigger in excludedAliases) {
+            continue
+          }
+
+          // Title Formatting: If it's a search shortcut fallback, append the query
+          if (result is SearchResult.SearchIntent && query.isNotBlank()) {
+            // Create a copy with updated title
+            // We need SearchResult structure to support copy, or just cast and copy.
+            // SearchIntent is a data class.
+            val updatedResult =
+              result.copy(title = "${result.title}: $query", subtitle = "Search for '$query'")
+            appSearchResults.add(updatedResult)
+          } else {
+            appSearchResults.add(result)
+          }
         }
         if (limit > 0 && appSearchResults.size >= limit * 2) break
         nextPage = searchResults.nextPageAsync.get()

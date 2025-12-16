@@ -45,6 +45,7 @@ class SearchShortcutRepository(context: Context) {
             packageName = obj.optString("packageName").takeIf { it.isNotEmpty() },
             suggestionUrl = obj.optString("suggestionUrl").takeIf { it.isNotEmpty() },
             color = if (obj.has("color")) obj.getLong("color") else null,
+            shortLabel = obj.optString("shortLabel").takeIf { it.isNotEmpty() },
           )
         }
       } catch (e: Exception) {
@@ -57,6 +58,16 @@ class SearchShortcutRepository(context: Context) {
     val defaults = DefaultShortcuts.searchShortcuts
     saveItems(defaults)
   }
+
+  suspend fun updateShortcut(shortcut: SearchShortcut) =
+    withContext(Dispatchers.IO) {
+      val currentItems = _items.value.toMutableList()
+      val index = currentItems.indexOfFirst { it.id == shortcut.id }
+      if (index != -1) {
+        currentItems[index] = shortcut
+        saveItems(currentItems)
+      }
+    }
 
   suspend fun updateAlias(shortcutId: String, newAlias: String) =
     withContext(Dispatchers.IO) {
@@ -104,6 +115,7 @@ class SearchShortcutRepository(context: Context) {
       item.packageName?.let { obj.put("packageName", it) }
       item.suggestionUrl?.let { obj.put("suggestionUrl", it) }
       item.color?.let { obj.put("color", it) }
+      item.shortLabel?.let { obj.put("shortLabel", it) }
       jsonArray.put(obj)
     }
     prefs.edit().putString("shortcuts", jsonArray.toString()).apply()
