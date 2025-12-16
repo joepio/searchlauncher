@@ -27,6 +27,14 @@ import org.json.JSONArray
 class SearchRepository(private val context: Context) {
   private val documentCache = Collections.synchronizedList(mutableListOf<AppSearchDocument>())
   private var appSearchSession: AppSearchSession? = null
+
+  private fun replaceCollection(namespace: String, documents: List<AppSearchDocument>) {
+    synchronized(documentCache) {
+      documentCache.removeAll { it.namespace == namespace }
+      documentCache.addAll(documents)
+    }
+  }
+
   private val executor = Executors.newSingleThreadExecutor()
   private val smartActionManager = SmartActionManager(context)
   private val iconGenerator = SearchIconGenerator(context)
@@ -150,10 +158,7 @@ class SearchRepository(private val context: Context) {
           android.util.Log.e("SearchRepository", "Failed to index apps", e)
         }
       }
-      synchronized(documentCache) {
-        documentCache.removeAll { it.namespace == "apps" }
-        documentCache.addAll(apps)
-      }
+      replaceCollection("apps", apps)
 
       try {
         indexShortcuts()
@@ -224,10 +229,7 @@ class SearchRepository(private val context: Context) {
         if (shortcuts.isNotEmpty()) {
           val putRequest = PutDocumentsRequest.Builder().addDocuments(shortcuts).build()
           session.putAsync(putRequest).get()
-          synchronized(documentCache) {
-            documentCache.removeAll { it.namespace == "shortcuts" }
-            documentCache.addAll(shortcuts)
-          }
+          replaceCollection("shortcuts", shortcuts)
         }
       } catch (e: Exception) {
         e.printStackTrace()
@@ -284,6 +286,7 @@ class SearchRepository(private val context: Context) {
       if (allDocs.isNotEmpty()) {
         val putRequest = PutDocumentsRequest.Builder().addDocuments(allDocs).build()
         session.putAsync(putRequest).get()
+        // Special case for custom shortcuts: they have two namespaces
         synchronized(documentCache) {
           documentCache.removeAll {
             it.namespace == "search_shortcuts" || it.namespace == "app_shortcuts"
@@ -322,10 +325,7 @@ class SearchRepository(private val context: Context) {
       if (docs.isNotEmpty()) {
         val putRequest = PutDocumentsRequest.Builder().addDocuments(docs).build()
         session.putAsync(putRequest).get()
-        synchronized(documentCache) {
-          documentCache.removeAll { it.namespace == "static_shortcuts" }
-          documentCache.addAll(docs)
-        }
+        replaceCollection("static_shortcuts", docs)
       }
     }
 
@@ -650,10 +650,7 @@ class SearchRepository(private val context: Context) {
         android.util.Log.d("SearchRepository", "Indexed ${contacts.size} contacts")
         val putRequest = PutDocumentsRequest.Builder().addDocuments(contacts).build()
         session.putAsync(putRequest).get()
-        synchronized(documentCache) {
-          documentCache.removeAll { it.namespace == "contacts" }
-          documentCache.addAll(contacts)
-        }
+        replaceCollection("contacts", contacts)
       } else {
         android.util.Log.d("SearchRepository", "No contacts found to index")
       }

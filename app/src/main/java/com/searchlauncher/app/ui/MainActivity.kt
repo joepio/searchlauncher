@@ -16,15 +16,10 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -60,26 +55,6 @@ class MainActivity : ComponentActivity() {
   private val APPWIDGET_HOST_ID = 1002
   private val REQUEST_CREATE_APPWIDGET = 5
   private val REQUEST_PICK_APPWIDGET = 9
-
-  /*
-  private val pickWidgetLauncher =
-    registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-      if (result.resultCode == RESULT_OK) {
-        val data = result.data
-        val extras = data?.extras
-        val appWidgetId =
-          extras?.getInt(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID, -1) ?: -1
-        if (appWidgetId != -1) {
-          configureWidget(appWidgetId)
-        }
-      } else {
-        // If canceled, we might need to delete the allocated ID, but for default picker it usually
-        // handles it.
-        // But if we allocated it beforehand, we should delete it.
-        // In our flow, we allocate ID BEFORE picking for simplicity if using allocateAppWidgetId
-      }
-    }
-    */
 
   private val createWidgetLauncher =
     registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -239,7 +214,6 @@ class MainActivity : ComponentActivity() {
   private var queryState by mutableStateOf("")
   private var currentScreenState by mutableStateOf(Screen.Search)
   private var focusTrigger by mutableStateOf(0L)
-  private var homeToAppList = false
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
@@ -256,12 +230,8 @@ class MainActivity : ComponentActivity() {
 
     if (intent.hasCategory(Intent.CATEGORY_HOME) && intent.action == Intent.ACTION_MAIN) {
       queryState = ""
-      if (homeToAppList) {
-        currentScreenState = Screen.AppList
-      } else {
-        currentScreenState = Screen.Search
-        focusTrigger = System.currentTimeMillis()
-      }
+      currentScreenState = Screen.Search
+      focusTrigger = System.currentTimeMillis()
     }
   }
 
@@ -287,15 +257,6 @@ class MainActivity : ComponentActivity() {
     // Ensure keyboard opens automatically
     @Suppress("DEPRECATION")
     window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-
-    lifecycleScope.launch {
-      dataStore.data
-        .map { it[PreferencesKeys.HOME_TO_APPLIST] ?: false }
-        .collect {
-          // homeToAppList = it -- Disabled for now per user request
-          homeToAppList = false
-        }
-    }
 
     setContent {
       val themeColor =
@@ -630,195 +591,8 @@ class MainActivity : ComponentActivity() {
     val BACKGROUND_LAST_IMAGE_URI =
       androidx.datastore.preferences.core.stringPreferencesKey("background_last_image_uri")
     val SWIPE_GESTURE_ENABLED = booleanPreferencesKey("swipe_gesture_enabled")
-    val HOME_TO_APPLIST = booleanPreferencesKey("home_to_applist")
+
     val SHOW_WIDGETS = booleanPreferencesKey("show_widgets")
-  }
-}
-
-@Composable
-private fun SnippetsCard() {
-  val context = LocalContext.current
-  val app = context.applicationContext as SearchLauncherApp
-  val snippetItems = app.snippetsRepository.items.collectAsState()
-  val scope = rememberCoroutineScope()
-
-  var showDialog by remember { mutableStateOf(false) }
-  var editingItem by remember { mutableStateOf<com.searchlauncher.app.data.SnippetItem?>(null) }
-
-  Card(modifier = Modifier.fillMaxWidth()) {
-    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Column(modifier = Modifier.weight(1f)) {
-          Text(text = "Snippets", style = MaterialTheme.typography.titleMedium)
-          Text(
-            text = "Quick access to frequently used text snippets",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-        }
-        Button(
-          onClick = {
-            editingItem = null
-            showDialog = true
-          }
-        ) {
-          Text("Add")
-        }
-      }
-
-      // List existing items
-      if (snippetItems.value.isNotEmpty()) {
-        Text(
-          text = "${snippetItems.value.size} item${if (snippetItems.value.size != 1) "s" else ""}",
-          style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        snippetItems.value.forEach { item ->
-          Card(modifier = Modifier.fillMaxWidth()) {
-            Row(
-              modifier = Modifier.fillMaxWidth().padding(12.dp),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Column(modifier = Modifier.weight(1f)) {
-                Text(
-                  text = item.alias,
-                  style = MaterialTheme.typography.bodyLarge,
-                  fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                )
-                Text(
-                  text = item.content.take(50) + if (item.content.length > 50) "..." else "",
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-              }
-              Row {
-                IconButton(
-                  onClick = {
-                    editingItem = item
-                    showDialog = true
-                  }
-                ) {
-                  Icon(
-                    imageVector = androidx.compose.material.icons.Icons.Default.Edit,
-                    contentDescription = "Edit",
-                  )
-                }
-                IconButton(
-                  onClick = { scope.launch { app.snippetsRepository.deleteItem(item.alias) } }
-                ) {
-                  Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.error,
-                  )
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  if (showDialog) {
-    SnippetDialog(
-      item = editingItem,
-      onDismiss = { showDialog = false },
-      onSave = { alias, content ->
-        scope.launch {
-          if (editingItem != null) {
-            app.snippetsRepository.updateItem(editingItem!!.alias, alias, content)
-          } else {
-            app.snippetsRepository.addItem(alias, content)
-          }
-          showDialog = false
-        }
-      },
-    )
-  }
-}
-
-@Composable
-private fun SnippetDialog(
-  item: com.searchlauncher.app.data.SnippetItem?,
-  onDismiss: () -> Unit,
-  onSave: (String, String) -> Unit,
-) {
-  var alias by remember { mutableStateOf(item?.alias ?: "") }
-  var content by remember { mutableStateOf(item?.content ?: "") }
-
-  AlertDialog(
-    onDismissRequest = onDismiss,
-    title = { Text(if (item != null) "Edit Snippet" else "Add Snippet") },
-    text = {
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-          value = alias,
-          onValueChange = { alias = it },
-          label = { Text("Alias") },
-          placeholder = { Text("e.g., 'bank', 'meet'") },
-          modifier = Modifier.fillMaxWidth(),
-          singleLine = true,
-        )
-
-        OutlinedTextField(
-          value = content,
-          onValueChange = { content = it },
-          label = { Text("Content") },
-          placeholder = { Text("The text to copy") },
-          modifier = Modifier.fillMaxWidth(),
-          minLines = 3,
-          maxLines = 6,
-        )
-      }
-    },
-    confirmButton = {
-      Button(
-        onClick = {
-          if (alias.isNotBlank() && content.isNotBlank()) {
-            onSave(alias.trim(), content.trim())
-          }
-        },
-        enabled = alias.isNotBlank() && content.isNotBlank(),
-      ) {
-        Text("Save")
-      }
-    },
-    dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-  )
-}
-
-@Composable
-private fun BackupRestoreCard() {
-  val context = LocalContext.current
-  val activity = context as? MainActivity
-
-  Card(modifier = Modifier.fillMaxWidth()) {
-    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(text = "Backup & Restore", style = MaterialTheme.typography.titleMedium)
-      Text(
-        text =
-          "Export all your data (Snippets, Shortcuts, Favorites, Background) to a .searchlauncher file",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
-
-      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = { activity?.exportBackup() }, modifier = Modifier.weight(1f)) {
-          Text("Export")
-        }
-
-        OutlinedButton(onClick = { activity?.importBackup() }, modifier = Modifier.weight(1f)) {
-          Text("Import")
-        }
-      }
-    }
   }
 }
 

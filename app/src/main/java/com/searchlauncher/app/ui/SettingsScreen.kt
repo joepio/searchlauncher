@@ -23,6 +23,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -30,8 +32,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
@@ -52,6 +56,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.searchlauncher.app.SearchLauncherApp
 import com.searchlauncher.app.ui.MainActivity.PreferencesKeys
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -185,44 +190,6 @@ fun SettingsScreen(
 
     Card(modifier = Modifier.fillMaxWidth()) {
       Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = "Home Screen", style = MaterialTheme.typography.titleMedium)
-
-        val scope = rememberCoroutineScope()
-        val homeToAppList =
-          remember { context.dataStore.data.map { it[PreferencesKeys.HOME_TO_APPLIST] ?: false } }
-            .collectAsState(initial = false)
-
-        /*
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          Column(modifier = Modifier.weight(1f)) {
-            Text(text = "Home opens App List", style = MaterialTheme.typography.bodyMedium)
-            Text(
-              text = "Open App List instead of Search when pressing Home",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          }
-          Switch(
-            checked = homeToAppList.value,
-            onCheckedChange = { enabled ->
-              scope.launch {
-                context.dataStore.edit { preferences ->
-                  preferences[PreferencesKeys.HOME_TO_APPLIST] = enabled
-                }
-              }
-            },
-          )
-        }
-        */
-      }
-    }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-      Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text = "Search Settings", style = MaterialTheme.typography.titleMedium)
 
         val scope = rememberCoroutineScope()
@@ -272,6 +239,22 @@ fun SettingsScreen(
         }
       }
     }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+      Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(text = "Custom Shortcuts", style = MaterialTheme.typography.titleMedium)
+        Text(
+          text = "Manage your custom search shortcuts (e.g., 'r' for Reddit)",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(onClick = onOpenCustomShortcuts, modifier = Modifier.fillMaxWidth()) {
+          Text("Manage Shortcuts")
+        }
+      }
+    }
+
+    SnippetsCard()
 
     Card(modifier = Modifier.fillMaxWidth()) {
       Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -433,6 +416,162 @@ fun PermissionStatus(
       Button(onClick = onGrant) { Text("Grant") }
     }
   }
+}
+
+@Composable
+private fun SnippetsCard() {
+  val context = LocalContext.current
+  val app = context.applicationContext as SearchLauncherApp
+  val snippetItems = app.snippetsRepository.items.collectAsState()
+  val scope = rememberCoroutineScope()
+
+  var showDialog by remember { mutableStateOf(false) }
+  var editingItem by remember { mutableStateOf<com.searchlauncher.app.data.SnippetItem?>(null) }
+
+  Card(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text(text = "Snippets", style = MaterialTheme.typography.titleMedium)
+          Text(
+            text = "Quick access to frequently used text snippets",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        Button(
+          onClick = {
+            editingItem = null
+            showDialog = true
+          }
+        ) {
+          Text("Add")
+        }
+      }
+
+      // List existing items
+      if (snippetItems.value.isNotEmpty()) {
+        Text(
+          text = "${snippetItems.value.size} item${if (snippetItems.value.size != 1) "s" else ""}",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        snippetItems.value.forEach { item ->
+          Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(12.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = item.alias,
+                  style = MaterialTheme.typography.bodyLarge,
+                  fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                )
+                Text(
+                  text = item.content.take(50) + if (item.content.length > 50) "..." else "",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+              Row {
+                IconButton(
+                  onClick = {
+                    editingItem = item
+                    showDialog = true
+                  }
+                ) {
+                  Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
+                }
+                IconButton(
+                  onClick = { scope.launch { app.snippetsRepository.deleteItem(item.alias) } }
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Delete",
+                    tint = MaterialTheme.colorScheme.error,
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (showDialog) {
+    SnippetDialog(
+      item = editingItem,
+      onDismiss = { showDialog = false },
+      onSave = { alias, content ->
+        scope.launch {
+          if (editingItem != null) {
+            app.snippetsRepository.updateItem(editingItem!!.alias, alias, content)
+          } else {
+            app.snippetsRepository.addItem(alias, content)
+          }
+          showDialog = false
+        }
+      },
+    )
+  }
+}
+
+@Composable
+private fun SnippetDialog(
+  item: com.searchlauncher.app.data.SnippetItem?,
+  onDismiss: () -> Unit,
+  onSave: (String, String) -> Unit,
+) {
+  var alias by remember { mutableStateOf(item?.alias ?: "") }
+  var content by remember { mutableStateOf(item?.content ?: "") }
+
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    title = { Text(if (item != null) "Edit Snippet" else "Add Snippet") },
+    text = {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+          value = alias,
+          onValueChange = { alias = it },
+          label = { Text("Alias") },
+          placeholder = { Text("e.g., 'bank', 'meet'") },
+          modifier = Modifier.fillMaxWidth(),
+          singleLine = true,
+        )
+
+        OutlinedTextField(
+          value = content,
+          onValueChange = { content = it },
+          label = { Text("Content") },
+          placeholder = { Text("The text to copy") },
+          modifier = Modifier.fillMaxWidth(),
+          minLines = 3,
+          maxLines = 6,
+        )
+      }
+    },
+    confirmButton = {
+      Button(
+        onClick = {
+          if (alias.isNotBlank() && content.isNotBlank()) {
+            onSave(alias.trim(), content.trim())
+          }
+        },
+        enabled = alias.isNotBlank() && content.isNotBlank(),
+      ) {
+        Text("Save")
+      }
+    },
+    dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+  )
 }
 
 @Composable
