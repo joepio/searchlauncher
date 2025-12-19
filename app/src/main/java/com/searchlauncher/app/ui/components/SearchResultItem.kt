@@ -74,14 +74,14 @@ fun SearchResultItem(
             } else {
               Modifier.size(40.dp)
             }
-          val imageBitmap = result.icon?.toImageBitmap()
+          val imageBitmap = remember(result.icon) { result.icon?.toImageBitmap() }
           if (imageBitmap != null) {
             Image(bitmap = imageBitmap, contentDescription = null, modifier = iconModifier)
           }
         }
 
         if (result is SearchResult.Shortcut && result.appIcon != null) {
-          val appIconBitmap = result.appIcon.toImageBitmap()
+          val appIconBitmap = remember(result.appIcon) { result.appIcon.toImageBitmap() }
           if (appIconBitmap != null) {
             Image(
               bitmap = appIconBitmap,
