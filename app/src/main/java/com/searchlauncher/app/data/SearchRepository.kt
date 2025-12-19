@@ -558,11 +558,14 @@ class SearchRepository(private val context: Context) {
       }
     }
 
-  suspend fun getFavorites(favoriteIds: Set<String>): List<SearchResult> =
+  suspend fun getFavorites(favoriteIds: List<String>): List<SearchResult> =
     withContext(Dispatchers.IO) {
       try {
         val docs =
-          synchronized(documentCache) { documentCache.filter { favoriteIds.contains(it.id) } }
+          synchronized(documentCache) {
+            val idMap = documentCache.filter { favoriteIds.contains(it.id) }.associateBy { it.id }
+            favoriteIds.mapNotNull { idMap[it] }
+          }
         val freshResults = coroutineScope {
           docs.map { doc -> async { convertDocumentToResult(doc, 100) } }.awaitAll()
         }

@@ -171,7 +171,7 @@ class BackupManager(
         // Import Favorites
         if (backupData.has("favorites")) {
           val favoritesArray = backupData.getJSONArray("favorites")
-          val favoriteIds = mutableSetOf<String>()
+          val favoriteIds = mutableListOf<String>()
           for (i in 0 until favoritesArray.length()) {
             favoriteIds.add(favoritesArray.getString(i))
             favoritesCount++

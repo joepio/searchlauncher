@@ -134,7 +134,7 @@ fun SearchScreen(
     if (query.isEmpty()) {
       searchResults =
         if (showHistory) {
-          searchRepository.getRecentItems(limit = 10, excludedIds = favoriteIds)
+          searchRepository.getRecentItems(limit = 10, excludedIds = favoriteIds.toSet())
         } else {
           emptyList()
         }
@@ -567,6 +567,7 @@ fun SearchScreen(
               onDismiss()
             },
             onRemoveFavorite = { result -> app.favoritesRepository.toggleFavorite(result.id) },
+            onReorder = { newOrder -> app.favoritesRepository.updateOrder(newOrder) },
           )
           Spacer(modifier = Modifier.height(4.dp))
         }
