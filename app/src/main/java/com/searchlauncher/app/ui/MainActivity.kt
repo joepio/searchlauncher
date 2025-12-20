@@ -221,6 +221,7 @@ class MainActivity : ComponentActivity() {
 
   private var queryState by mutableStateOf("")
   private var currentScreenState by mutableStateOf(Screen.Search)
+  private var pendingSettingsSection by mutableStateOf<String?>(null)
   private var focusTrigger by mutableStateOf(0L)
 
   override fun onNewIntent(intent: Intent) {
@@ -236,9 +237,24 @@ class MainActivity : ComponentActivity() {
       return
     }
 
+    val settingPage = intent.getStringExtra("open_setting_page")
+    if (settingPage != null) {
+      when (settingPage) {
+        "custom_shortcuts" -> currentScreenState = Screen.CustomShortcuts
+        "snippets",
+        "history",
+        "wallpaper" -> {
+          currentScreenState = Screen.Settings
+          pendingSettingsSection = settingPage
+        }
+      }
+      return
+    }
+
     if (intent.hasCategory(Intent.CATEGORY_HOME) && intent.action == Intent.ACTION_MAIN) {
       queryState = ""
       currentScreenState = Screen.Search
+      pendingSettingsSection = null
       focusTrigger = System.currentTimeMillis()
     }
   }
@@ -466,6 +482,7 @@ class MainActivity : ComponentActivity() {
                 onOpenPractice = { showPractice = true },
                 onOpenCustomShortcuts = { currentScreenState = Screen.CustomShortcuts },
                 onBack = { currentScreenState = Screen.Search },
+                initialHighlightSection = pendingSettingsSection,
               )
             }
             Screen.CustomShortcuts -> {

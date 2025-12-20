@@ -201,13 +201,27 @@ object DefaultShortcuts {
         description = "Toggle Dark Mode",
       ),
       AppShortcut.Action(
-        id = "launcher_settings",
-        intentUri =
-          "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;component=com.searchlauncher.app/.ui.MainActivity;B.open_settings=true;end",
-        description = "SearchLauncher Settings",
+        id = "launcher_custom_shortcuts",
+        intentUri = "intent:#Intent;action=com.searchlauncher.action.SETTINGS_CUSTOM_SHORTCUTS;end",
+        description = "Custom Shortcuts",
       ),
       AppShortcut.Action(
-        id = "reset_onboarding",
+        id = "launcher_snippets",
+        intentUri = "intent:#Intent;action=com.searchlauncher.action.SETTINGS_SNIPPETS;end",
+        description = "Snippets",
+      ),
+      AppShortcut.Action(
+        id = "launcher_history",
+        intentUri = "intent:#Intent;action=com.searchlauncher.action.SETTINGS_HISTORY;end",
+        description = "Search History",
+      ),
+      AppShortcut.Action(
+        id = "launcher_wallpaper",
+        intentUri = "intent:#Intent;action=com.searchlauncher.action.SETTINGS_WALLPAPER;end",
+        description = "Background Settings",
+      ),
+      AppShortcut.Action(
+        id = "launcher_onboarding",
         intentUri = "intent:#Intent;action=com.searchlauncher.action.RESET_ONBOARDING;end",
         description = "Start Onboarding",
       ),

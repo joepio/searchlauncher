@@ -1345,8 +1345,11 @@ class SearchRepository(private val context: Context) {
           id = doc.id,
           namespace = "app_shortcuts",
           title = doc.name,
-          subtitle = "Action",
-          icon = icon,
+          subtitle = if (doc.id.contains("launcher_")) "SearchLauncher" else "Action",
+          icon =
+            if (doc.id.contains("launcher_")) {
+              getColoredSearchIcon(0xFF5E6D4E, "⚙")
+            } else icon,
           packageName = "android",
           deepLink = doc.intentUri,
           rankingScore = rankingScore,

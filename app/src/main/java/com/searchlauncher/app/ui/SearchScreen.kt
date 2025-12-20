@@ -246,7 +246,8 @@ fun SearchScreen(
               namespace = "calculator",
               title = formattedResult,
               subtitle = "Calculation result (Tap to copy)",
-              icon = searchRepository.getColoredSearchIcon(themeColor.toLong(), "="),
+              icon =
+                searchRepository.getColoredSearchIcon(themeColor.toLong() and 0xFFFFFFFFL, "="),
               packageName = "android",
               deepLink = "calculator://copy?text=$formattedResult",
             )

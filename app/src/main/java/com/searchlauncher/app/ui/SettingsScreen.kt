@@ -18,8 +18,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -68,9 +69,27 @@ fun SettingsScreen(
   onOpenPractice: () -> Unit,
   onOpenCustomShortcuts: () -> Unit,
   onBack: () -> Unit,
+  initialHighlightSection: String? = null,
 ) {
   val context = LocalContext.current
   var showPermissionDialog by remember { mutableStateOf(false) }
+  val listState = rememberLazyListState()
+
+  // Use LaunchedEffect to scroll to the requested section
+  LaunchedEffect(initialHighlightSection) {
+    if (initialHighlightSection != null) {
+      val index =
+        when (initialHighlightSection) {
+          "wallpaper" -> 1 // ThemeSettingsCard
+          "history" -> 3 // Search Settings
+          "snippets" -> 5 // SnippetsCard
+          else -> -1
+        }
+      if (index >= 0) {
+        listState.animateScrollToItem(index)
+      }
+    }
+  }
 
   // Check if required permissions are granted
   val hasOverlayPermission = remember {
@@ -88,230 +107,255 @@ fun SettingsScreen(
     resolveInfo?.activityInfo?.packageName == context.packageName
   }
 
-  Column(
-    modifier =
-      Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(PaddingValues(16.dp)),
+  LazyColumn(
+    state = listState,
+    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp),
+    contentPadding = PaddingValues(bottom = 32.dp),
   ) {
-    Row(
-      modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      IconButton(onClick = onBack) {
-        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    item {
+      Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        IconButton(onClick = onBack) {
+          Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = "SearchLauncher", style = MaterialTheme.typography.headlineLarge)
       }
-      Spacer(modifier = Modifier.width(8.dp))
-      Text(text = "SearchLauncher", style = MaterialTheme.typography.headlineLarge)
     }
 
-    ThemeSettingsCard(onNavigateToHome = onBack)
+    item { ThemeSettingsCard(onNavigateToHome = onBack) }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-      Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val scope = rememberCoroutineScope()
-        val swipeGestureEnabled =
-          remember {
-              context.dataStore.data.map { it[PreferencesKeys.SWIPE_GESTURE_ENABLED] ?: false }
-            }
-            .collectAsState(initial = false)
-
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
+    item {
+      Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+          modifier = Modifier.padding(16.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Column(modifier = Modifier.weight(1f)) {
-            Text(text = "Side swipe gesture", style = MaterialTheme.typography.titleMedium)
-            Text(
-              text = "Swipe from the edge of the screen and back to open search",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          }
-          Switch(
-            checked = swipeGestureEnabled.value,
-            onCheckedChange = { enabled ->
-              if (enabled) {
-                // Check permissions before enabling
-                if (hasOverlayPermission && hasAccessibilityPermission) {
-                  scope.launch {
-                    context.dataStore.edit { preferences ->
-                      preferences[PreferencesKeys.SWIPE_GESTURE_ENABLED] = true
+          val scope = rememberCoroutineScope()
+          val swipeGestureEnabled =
+            remember {
+                context.dataStore.data.map { it[PreferencesKeys.SWIPE_GESTURE_ENABLED] ?: false }
+              }
+              .collectAsState(initial = false)
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(text = "Side swipe gesture", style = MaterialTheme.typography.titleMedium)
+              Text(
+                text = "Swipe from the edge of the screen and back to open search",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            Switch(
+              checked = swipeGestureEnabled.value,
+              onCheckedChange = { enabled ->
+                if (enabled) {
+                  // Check permissions before enabling
+                  if (hasOverlayPermission && hasAccessibilityPermission) {
+                    scope.launch {
+                      context.dataStore.edit { preferences ->
+                        preferences[PreferencesKeys.SWIPE_GESTURE_ENABLED] = true
+                      }
+                      onStartService()
                     }
-                    onStartService()
+                  } else {
+                    showPermissionDialog = true
                   }
                 } else {
-                  showPermissionDialog = true
-                }
-              } else {
-                scope.launch {
-                  context.dataStore.edit { preferences ->
-                    preferences[PreferencesKeys.SWIPE_GESTURE_ENABLED] = false
+                  scope.launch {
+                    context.dataStore.edit { preferences ->
+                      preferences[PreferencesKeys.SWIPE_GESTURE_ENABLED] = false
+                    }
+                    onStopService()
                   }
-                  onStopService()
                 }
-              }
-            },
-          )
-        }
+              },
+            )
+          }
 
-        OutlinedButton(onClick = onOpenPractice, modifier = Modifier.fillMaxWidth()) {
-          Text("Practice Gesture")
+          OutlinedButton(onClick = onOpenPractice, modifier = Modifier.fillMaxWidth()) {
+            Text("Practice Gesture")
+          }
         }
       }
     }
 
     // Show launcher settings if not default launcher
     if (!isDefaultLauncher) {
+      item {
+        Card(modifier = Modifier.fillMaxWidth()) {
+          Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            Text(text = "Launcher", style = MaterialTheme.typography.titleMedium)
+            Text(
+              text = "Set SearchLauncher as your default home screen",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Button(
+              onClick = {
+                val intent = Intent(Settings.ACTION_HOME_SETTINGS)
+                context.startActivity(intent)
+              },
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              Text("Set as Default Launcher")
+            }
+          }
+        }
+      }
+    }
+
+    item {
       Card(modifier = Modifier.fillMaxWidth()) {
         Column(
           modifier = Modifier.padding(16.dp),
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Text(text = "Launcher", style = MaterialTheme.typography.titleMedium)
+          Text(text = "Search Settings", style = MaterialTheme.typography.titleMedium)
+
+          val scope = rememberCoroutineScope()
+          val showHistory =
+            remember {
+                context.dataStore.data.map { it[booleanPreferencesKey("show_history")] ?: true }
+              }
+              .collectAsState(initial = true)
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(text = "Show History", style = MaterialTheme.typography.bodyMedium)
+              Text(
+                text = "Display recently used items when search is empty",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            Switch(
+              checked = showHistory.value,
+              onCheckedChange = { enabled ->
+                scope.launch {
+                  context.dataStore.edit { preferences ->
+                    preferences[booleanPreferencesKey("show_history")] = enabled
+                  }
+                }
+              },
+            )
+          }
+        }
+      }
+    }
+
+    item {
+      Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+          modifier = Modifier.padding(16.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          Text(text = "Custom Shortcuts", style = MaterialTheme.typography.titleMedium)
           Text(
-            text = "Set SearchLauncher as your default home screen",
+            text = "Manage your custom search shortcuts (e.g., 'r' for Reddit)",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
-
-          Button(
-            onClick = {
-              val intent = Intent(Settings.ACTION_HOME_SETTINGS)
-              context.startActivity(intent)
-            },
-            modifier = Modifier.fillMaxWidth(),
-          ) {
-            Text("Set as Default Launcher")
+          Button(onClick = onOpenCustomShortcuts, modifier = Modifier.fillMaxWidth()) {
+            Text("Manage Shortcuts")
           }
         }
       }
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-      Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = "Search Settings", style = MaterialTheme.typography.titleMedium)
+    item { SnippetsCard() }
 
-        val scope = rememberCoroutineScope()
-        val showHistory =
-          remember {
-              context.dataStore.data.map { it[booleanPreferencesKey("show_history")] ?: true }
-            }
-            .collectAsState(initial = true)
-
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
+    item {
+      Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+          modifier = Modifier.padding(16.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Column(modifier = Modifier.weight(1f)) {
-            Text(text = "Show History", style = MaterialTheme.typography.bodyMedium)
-            Text(
-              text = "Display recently used items when search is empty",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          }
-          Switch(
-            checked = showHistory.value,
-            onCheckedChange = { enabled ->
-              scope.launch {
-                context.dataStore.edit { preferences ->
-                  preferences[booleanPreferencesKey("show_history")] = enabled
+          Text(text = "Permissions", style = MaterialTheme.typography.titleMedium)
+
+          PermissionStatus(
+            title = "Display Over Other Apps",
+            description =
+              "Required for the side swipe gesture to show the search overlay on top of other apps.",
+            granted =
+              rememberPermissionState {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    Settings.canDrawOverlays(context)
+                  } else true
                 }
+                .value,
+            onGrant = {
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent =
+                  Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:${context.packageName}"),
+                  )
+                context.startActivity(intent)
               }
+            },
+          )
+
+          PermissionStatus(
+            title = "Accessibility Service",
+            description =
+              "Required for the side swipe gesture to detect swipes from the edge of the screen.",
+            granted = rememberPermissionState { isAccessibilityServiceEnabled(context) }.value,
+            onGrant = {
+              val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+              context.startActivity(intent)
+            },
+          )
+
+          PermissionStatus(
+            title = "Usage Access",
+            description = "Required to accurately detect when the keyboard is open.",
+            granted = rememberPermissionState { hasUsageStatsPermission(context) }.value,
+            onGrant = {
+              val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+              context.startActivity(intent)
+            },
+          )
+
+          PermissionStatus(
+            title = "Read Contacts",
+            description = "Required to search your contacts.",
+            granted =
+              rememberPermissionState {
+                  ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) ==
+                    PackageManager.PERMISSION_GRANTED
+                }
+                .value,
+            onGrant = {
+              val intent =
+                Intent(
+                  Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                  Uri.parse("package:${context.packageName}"),
+                )
+              context.startActivity(intent)
             },
           )
         }
       }
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-      Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = "Custom Shortcuts", style = MaterialTheme.typography.titleMedium)
-        Text(
-          text = "Manage your custom search shortcuts (e.g., 'r' for Reddit)",
-          style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Button(onClick = onOpenCustomShortcuts, modifier = Modifier.fillMaxWidth()) {
-          Text("Manage Shortcuts")
-        }
-      }
-    }
-
-    SnippetsCard()
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-      Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = "Permissions", style = MaterialTheme.typography.titleMedium)
-
-        PermissionStatus(
-          title = "Display Over Other Apps",
-          description =
-            "Required for the side swipe gesture to show the search overlay on top of other apps.",
-          granted =
-            rememberPermissionState {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                  Settings.canDrawOverlays(context)
-                } else true
-              }
-              .value,
-          onGrant = {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-              val intent =
-                Intent(
-                  Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                  Uri.parse("package:${context.packageName}"),
-                )
-              context.startActivity(intent)
-            }
-          },
-        )
-
-        PermissionStatus(
-          title = "Accessibility Service",
-          description =
-            "Required for the side swipe gesture to detect swipes from the edge of the screen.",
-          granted = rememberPermissionState { isAccessibilityServiceEnabled(context) }.value,
-          onGrant = {
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            context.startActivity(intent)
-          },
-        )
-
-        PermissionStatus(
-          title = "Usage Access",
-          description = "Required to accurately detect when the keyboard is open.",
-          granted = rememberPermissionState { hasUsageStatsPermission(context) }.value,
-          onGrant = {
-            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-            context.startActivity(intent)
-          },
-        )
-
-        PermissionStatus(
-          title = "Read Contacts",
-          description = "Required to search your contacts.",
-          granted =
-            rememberPermissionState {
-                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) ==
-                  PackageManager.PERMISSION_GRANTED
-              }
-              .value,
-          onGrant = {
-            val intent =
-              Intent(
-                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:${context.packageName}"),
-              )
-            context.startActivity(intent)
-          },
-        )
-      }
-    }
-
-    BackupRestoreCard()
+    item { BackupRestoreCard() }
   }
 
   // Show permission guide dialog

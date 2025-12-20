@@ -48,6 +48,22 @@ object CustomActionHandler {
         resetAppData(context)
         true
       }
+      "com.searchlauncher.action.SETTINGS_CUSTOM_SHORTCUTS" -> {
+        openInternalSetting(context, "custom_shortcuts")
+        true
+      }
+      "com.searchlauncher.action.SETTINGS_SNIPPETS" -> {
+        openInternalSetting(context, "snippets")
+        true
+      }
+      "com.searchlauncher.action.SETTINGS_HISTORY" -> {
+        openInternalSetting(context, "history")
+        true
+      }
+      "com.searchlauncher.action.SETTINGS_WALLPAPER" -> {
+        openInternalSetting(context, "wallpaper")
+        true
+      }
       else -> false
     }
   }
@@ -210,6 +226,17 @@ object CustomActionHandler {
     } catch (e: Exception) {
       e.printStackTrace()
       Toast.makeText(context, "Error clearing app data: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+  }
+
+  private fun openInternalSetting(context: Context, setting: String) {
+    try {
+      val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+      intent?.putExtra("open_setting_page", setting)
+      intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+      context.startActivity(intent)
+    } catch (e: Exception) {
+      e.printStackTrace()
     }
   }
 }
