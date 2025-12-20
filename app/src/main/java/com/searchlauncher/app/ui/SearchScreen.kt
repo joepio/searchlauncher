@@ -10,7 +10,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -35,7 +34,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.ImeAction
@@ -49,6 +47,9 @@ import com.searchlauncher.app.ui.components.FavoritesRow
 import com.searchlauncher.app.ui.components.SearchResultItem
 import com.searchlauncher.app.ui.components.SnippetDialog
 import com.searchlauncher.app.ui.components.WallpaperBackground
+import com.searchlauncher.app.ui.onboarding.OnboardingManager
+import com.searchlauncher.app.ui.onboarding.OnboardingStep
+import com.searchlauncher.app.ui.onboarding.TutorialOverlay
 import com.searchlauncher.app.ui.theme.SearchLauncherTheme
 import com.searchlauncher.app.util.CustomActionHandler
 import kotlinx.coroutines.Dispatchers
@@ -96,6 +97,55 @@ fun SearchScreen(
   var snippetEditMode by remember { mutableStateOf(false) }
   var snippetItemToEdit by remember { mutableStateOf<SearchResult.Snippet?>(null) }
   val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+  // Onboarding Logic
+  val onboardingManager = remember { OnboardingManager(context) }
+  val completedSteps by onboardingManager.completedSteps.collectAsState(initial = emptySet())
+
+  // Determine current step
+  val currentOnboardingStep =
+    remember(completedSteps, query) {
+      if (query.isNotEmpty()) {
+        if (!completedSteps.contains(OnboardingStep.AddFavorite) && searchResults.isNotEmpty())
+          OnboardingStep.AddFavorite
+        else null
+      } else {
+        if (!completedSteps.contains(OnboardingStep.SwipeBackground) && folderImages.size > 1)
+          OnboardingStep.SwipeBackground
+        else if (!completedSteps.contains(OnboardingStep.SwipeNotifications))
+          OnboardingStep.SwipeNotifications
+        else if (!completedSteps.contains(OnboardingStep.SwipeQuickSettings))
+          OnboardingStep.SwipeQuickSettings
+        else if (!completedSteps.contains(OnboardingStep.SwipeAppDrawer))
+          OnboardingStep.SwipeAppDrawer
+        else if (!completedSteps.contains(OnboardingStep.LongPressBackground))
+          OnboardingStep.LongPressBackground
+        else if (!completedSteps.contains(OnboardingStep.SearchYoutube))
+          OnboardingStep.SearchYoutube
+        else if (!completedSteps.contains(OnboardingStep.SearchGoogle)) OnboardingStep.SearchGoogle
+        else if (!completedSteps.contains(OnboardingStep.ReorderFavorites) && favorites.size >= 2)
+          OnboardingStep.ReorderFavorites
+        // AddFavorite is situational, shown when search results exist
+        else null
+      }
+    }
+
+  // Effect to mark steps complete based on state
+  LaunchedEffect(query, completedSteps) {
+    if (
+      !completedSteps.contains(OnboardingStep.SearchYoutube) &&
+        query.trimStart().startsWith("y ", ignoreCase = true)
+    ) {
+      onboardingManager.markStepComplete(OnboardingStep.SearchYoutube)
+    }
+
+    if (
+      !completedSteps.contains(OnboardingStep.SearchGoogle) &&
+        query.trimStart().startsWith("g ", ignoreCase = true)
+    ) {
+      onboardingManager.markStepComplete(OnboardingStep.SearchGoogle)
+    }
+  }
 
   LaunchedEffect(searchResults) {
     if (searchResults.isNotEmpty()) {
@@ -233,8 +283,10 @@ fun SearchScreen(
   // Read synchronously for initial value
   var storedKeyboardHeight by remember { mutableStateOf(sharedPrefs.getInt("keyboard_height", 0)) }
 
+  val isMultiWindow = (context as? android.app.Activity)?.isInMultiWindowMode == true
+
   LaunchedEffect(imeHeightPx) {
-    if (imeHeightPx > 100) {
+    if (imeHeightPx > 100 && !isMultiWindow) {
       // Wait for animation to settle (debounce)
       kotlinx.coroutines.delay(300)
       // If we are still active (didn't get cancelled by new value), save it
@@ -244,7 +296,15 @@ fun SearchScreen(
   }
 
   // The effective padding is the max of current IME or stored IME height
-  val bottomPadding = with(density) { kotlin.math.max(imeHeightPx, storedKeyboardHeight).toDp() }
+  // In multi-window/floating mode, we ignore stored height to avoid unnecessary gaps
+  val bottomPadding =
+    with(density) {
+      if (isMultiWindow) {
+        imeHeightPx.toDp()
+      } else {
+        kotlin.math.max(imeHeightPx, storedKeyboardHeight).toDp()
+      }
+    }
 
   SearchLauncherTheme(
     themeColor = themeColor,
@@ -252,29 +312,7 @@ fun SearchScreen(
     chroma = themeSaturation,
     isOled = isOled,
   ) {
-    Box(
-      modifier =
-        Modifier.fillMaxSize().pointerInput(Unit) {
-          detectDragGestures { change, dragAmount ->
-            // Detect vertical swipe down
-            if (dragAmount.y > 20) { // Threshold for swipe down
-              val isLeft = change.position.x < size.width / 2
-              if (isLeft) {
-                if (!GestureAccessibilityService.openNotifications()) {
-                  com.searchlauncher.app.util.SystemUtils.expandNotifications(context)
-                }
-              } else {
-                if (!GestureAccessibilityService.openQuickSettings()) {
-                  com.searchlauncher.app.util.SystemUtils.expandQuickSettings(context)
-                }
-              }
-            } else if (dragAmount.y < -20) {
-              // Swipe Up
-              onOpenAppDrawer()
-            }
-          }
-        }
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
       val launcher =
         androidx.activity.compose.rememberLauncherForActivityResult(
           contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
@@ -319,12 +357,42 @@ fun SearchScreen(
           folderImages = folderImages,
           lastImageUriString = lastImageUriString,
           modifier = Modifier.fillMaxSize(),
-          onOpenAppDrawer = onOpenAppDrawer,
+          onOpenAppDrawer = {
+            scope.launch { onboardingManager.markStepComplete(OnboardingStep.SwipeAppDrawer) }
+            onOpenAppDrawer()
+          },
           onLongPress = { offset ->
             menuOffset = offset
             showBackgroundMenu = true
+            scope.launch { onboardingManager.markStepComplete(OnboardingStep.LongPressBackground) }
           },
-          onTap = { onDismiss() },
+          onTap = {
+            onDismiss()
+            // Tapping background also swipes? No, just dismiss.
+            // But if we want to complete "Swipe Background", we need to detect the swipe in
+            // WallpaperBackground
+          },
+          onPageChanged = {
+            scope.launch { onboardingManager.markStepComplete(OnboardingStep.SwipeBackground) }
+          },
+          onSwipeDownLeft = {
+            scope.launch { onboardingManager.markStepComplete(OnboardingStep.SwipeNotifications) }
+            if (!com.searchlauncher.app.service.GestureAccessibilityService.openNotifications()) {
+              com.searchlauncher.app.util.SystemUtils.expandNotifications(context)
+            }
+          },
+          onSwipeDownRight = {
+            scope.launch { onboardingManager.markStepComplete(OnboardingStep.SwipeQuickSettings) }
+            if (!com.searchlauncher.app.service.GestureAccessibilityService.openQuickSettings()) {
+              com.searchlauncher.app.util.SystemUtils.expandQuickSettings(context)
+            }
+          },
+        )
+
+        TutorialOverlay(
+          currentStep = currentOnboardingStep,
+          bottomPadding = bottomPadding,
+          onDismissStep = { /* optional manual dismiss */ },
         )
       }
 
@@ -444,6 +512,9 @@ fun SearchScreen(
                         {
                           app.favoritesRepository.toggleFavorite(result.id)
                           onQueryChange("")
+                          scope.launch {
+                            onboardingManager.markStepComplete(OnboardingStep.AddFavorite)
+                          }
                         }
                       } else null,
                     onEditSnippet =
@@ -528,6 +599,18 @@ fun SearchScreen(
                               "intent:#Intent;action=com.searchlauncher.action.ADD_WIDGET;end"
                         ) {
                           onAddWidget()
+                        } else if (
+                          (result is SearchResult.Content &&
+                            result.deepLink ==
+                              "intent:#Intent;action=com.searchlauncher.action.RESET_ONBOARDING;end") ||
+                            (result is SearchResult.Shortcut &&
+                              result.intentUri ==
+                                "intent:#Intent;action=com.searchlauncher.action.RESET_ONBOARDING;end")
+                        ) {
+                          scope.launch {
+                            onboardingManager.resetOnboarding()
+                            onDismiss()
+                          }
                         } else {
                           launchResult(
                             context,
@@ -567,7 +650,10 @@ fun SearchScreen(
               onDismiss()
             },
             onRemoveFavorite = { result -> app.favoritesRepository.toggleFavorite(result.id) },
-            onReorder = { newOrder -> app.favoritesRepository.updateOrder(newOrder) },
+            onReorder = { newOrder ->
+              app.favoritesRepository.updateOrder(newOrder)
+              scope.launch { onboardingManager.markStepComplete(OnboardingStep.ReorderFavorites) }
+            },
           )
           Spacer(modifier = Modifier.height(4.dp))
         }

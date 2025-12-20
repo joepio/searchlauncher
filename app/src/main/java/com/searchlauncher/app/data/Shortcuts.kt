@@ -206,6 +206,11 @@ object DefaultShortcuts {
           "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;component=com.searchlauncher.app/.ui.MainActivity;B.open_settings=true;end",
         description = "SearchLauncher Settings",
       ),
+      AppShortcut.Action(
+        id = "reset_onboarding",
+        intentUri = "intent:#Intent;action=com.searchlauncher.action.RESET_ONBOARDING;end",
+        description = "Start Onboarding",
+      ),
     ) + generateSettingsShortcuts()
 
   // User-editable search shortcuts with default aliases

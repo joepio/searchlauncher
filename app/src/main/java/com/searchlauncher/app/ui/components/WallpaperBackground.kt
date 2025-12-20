@@ -57,7 +57,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.datastore.preferences.core.edit
 import coil.compose.AsyncImage
-import com.searchlauncher.app.service.GestureAccessibilityService
 import com.searchlauncher.app.ui.MainActivity
 import com.searchlauncher.app.ui.WidgetHostViewFactory
 import com.searchlauncher.app.ui.dataStore
@@ -76,6 +75,9 @@ fun WallpaperBackground(
   onOpenAppDrawer: () -> Unit = {},
   onLongPress: (Offset) -> Unit = {},
   onTap: () -> Unit = {},
+  onPageChanged: () -> Unit = {},
+  onSwipeDownLeft: () -> Unit = {},
+  onSwipeDownRight: () -> Unit = {},
 ) {
   val context = LocalContext.current
 
@@ -104,13 +106,21 @@ fun WallpaperBackground(
     }
   }
 
+  val currentOnPageChanged by androidx.compose.runtime.rememberUpdatedState(onPageChanged)
+
   // Save current image URI when page changes
-  LaunchedEffect(pagerState) {
+  LaunchedEffect(pagerState, folderImages) {
     snapshotFlow { pagerState.currentPage }
       .collect { page ->
         if (folderImages.isNotEmpty()) {
           val actualIndex = page % folderImages.size
           val currentUri = folderImages[actualIndex].toString()
+
+          // Only trigger if we are "settled" or it's a genuine change?
+          // snapshotFlow emits whenever currentPage updates (which is usually on snap).
+          // We invoke the callback.
+          currentOnPageChanged()
+
           if (currentUri != lastImageUriString) {
             context.dataStore.edit { prefs ->
               prefs[MainActivity.PreferencesKeys.BACKGROUND_LAST_IMAGE_URI] = currentUri
@@ -138,13 +148,9 @@ fun WallpaperBackground(
             if (dragAmount.y > 20) {
               val isLeft = change.position.x < size.width / 2
               if (isLeft) {
-                if (!GestureAccessibilityService.openNotifications()) {
-                  com.searchlauncher.app.util.SystemUtils.expandNotifications(context)
-                }
+                onSwipeDownLeft()
               } else {
-                if (!GestureAccessibilityService.openQuickSettings()) {
-                  com.searchlauncher.app.util.SystemUtils.expandQuickSettings(context)
-                }
+                onSwipeDownRight()
               }
             } else if (dragAmount.y < -20) {
               onOpenAppDrawer()

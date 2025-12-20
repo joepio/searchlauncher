@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -66,6 +67,7 @@ class MainActivity : ComponentActivity() {
         if (appWidgetId != -1) {
           lifecycleScope.launch {
             (application as SearchLauncherApp).widgetRepository.addWidgetId(appWidgetId)
+            dataStore.edit { prefs -> prefs[PreferencesKeys.SHOW_WIDGETS] = true }
           }
         }
       } else {
@@ -108,14 +110,19 @@ class MainActivity : ComponentActivity() {
               "MainActivity",
               "Widget $appWidgetId verified bound. Configuring/Adding.",
             )
-            try {
-              configureWidget(appWidgetId)
-            } catch (e: Exception) {
-              android.util.Log.e("MainActivity", "Config failed, force adding", e)
-              lifecycleScope.launch {
-                (application as SearchLauncherApp).widgetRepository.addWidgetId(appWidgetId)
+            // Post to handler to ensure ActivityResult state is settled before launching another
+            // activity
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+              try {
+                configureWidget(appWidgetId)
+              } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Config failed, force adding", e)
+                lifecycleScope.launch {
+                  (application as SearchLauncherApp).widgetRepository.addWidgetId(appWidgetId)
+                  dataStore.edit { prefs -> prefs[PreferencesKeys.SHOW_WIDGETS] = true }
+                }
+                Toast.makeText(this, "Configuration skipped.", Toast.LENGTH_SHORT).show()
               }
-              Toast.makeText(this, "Configuration skipped.", Toast.LENGTH_SHORT).show()
             }
           } else {
             android.util.Log.e("MainActivity", "Widget $appWidgetId NOT bound.")
@@ -207,6 +214,7 @@ class MainActivity : ComponentActivity() {
     } else {
       lifecycleScope.launch {
         (application as SearchLauncherApp).widgetRepository.addWidgetId(appWidgetId)
+        dataStore.edit { prefs -> prefs[PreferencesKeys.SHOW_WIDGETS] = true }
       }
     }
   }

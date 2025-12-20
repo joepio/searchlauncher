@@ -240,20 +240,6 @@ fun SettingsScreen(
       }
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-      Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = "Custom Shortcuts", style = MaterialTheme.typography.titleMedium)
-        Text(
-          text = "Manage your custom search shortcuts (e.g., 'r' for Reddit)",
-          style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Button(onClick = onOpenCustomShortcuts, modifier = Modifier.fillMaxWidth()) {
-          Text("Manage Shortcuts")
-        }
-      }
-    }
-
     SnippetsCard()
 
     Card(modifier = Modifier.fillMaxWidth()) {
