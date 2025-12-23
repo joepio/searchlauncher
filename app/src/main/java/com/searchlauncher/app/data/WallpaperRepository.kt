@@ -1,6 +1,9 @@
 package com.searchlauncher.app.data
 
+import android.app.WallpaperManager
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import java.io.File
 import java.io.FileOutputStream
@@ -69,6 +72,29 @@ class WallpaperRepository(private val context: Context) {
       } else {
         false
       }
+    } catch (e: Exception) {
+      e.printStackTrace()
+      false
+    }
+  }
+
+  fun addSystemWallpaper(): Boolean {
+    return try {
+      val wallpaperManager = WallpaperManager.getInstance(context)
+      val drawable = wallpaperManager.drawable ?: return false
+      val bitmap = (drawable as? BitmapDrawable)?.bitmap ?: return false
+
+      val filename = "wp_system_${System.currentTimeMillis()}.jpg"
+      val targetFile = File(wallpaperDir, filename)
+
+      FileOutputStream(targetFile).use { output ->
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
+      }
+      loadWallpapers()
+      true
+    } catch (e: SecurityException) {
+      android.util.Log.w("WallpaperRepository", "Permission denied for system wallpaper", e)
+      false
     } catch (e: Exception) {
       e.printStackTrace()
       false

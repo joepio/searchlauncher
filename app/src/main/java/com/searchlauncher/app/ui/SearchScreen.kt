@@ -206,6 +206,16 @@ fun SearchScreen(
     }
   }
 
+  // Refresh favorites when index is updated (e.g. after background re-indexing)
+  LaunchedEffect(searchRepository) {
+    searchRepository.indexUpdated.collect {
+      val ids = app.favoritesRepository.favoriteIds.value
+      if (ids.isNotEmpty()) {
+        searchRepository.getFavorites(ids)
+      }
+    }
+  }
+
   LaunchedEffect(query, showHistory, favoriteIds) {
     if (query.isEmpty()) {
       searchResults =

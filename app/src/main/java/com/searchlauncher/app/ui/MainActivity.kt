@@ -253,8 +253,11 @@ class MainActivity : ComponentActivity() {
     val settingPage = intent.getStringExtra("open_setting_page")
     if (settingPage != null) {
       when (settingPage) {
-        "custom_shortcuts" -> currentScreenState = Screen.CustomShortcuts
-        "snippets",
+        "custom_shortcuts",
+        "shortcuts" -> {
+          currentScreenState = Screen.Settings
+          pendingSettingsSection = "shortcuts"
+        }
         "history",
         "wallpaper" -> {
           currentScreenState = Screen.Settings
@@ -358,7 +361,6 @@ class MainActivity : ComponentActivity() {
   private enum class Screen {
     Search,
     Settings,
-    CustomShortcuts,
     AppList,
   }
 
@@ -369,7 +371,6 @@ class MainActivity : ComponentActivity() {
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
-    // Hoist wallpaper state
     // Hoist wallpaper state
     val lastImageUriString by
       remember { context.dataStore.data.map { it[PreferencesKeys.BACKGROUND_LAST_IMAGE_URI] } }
@@ -388,9 +389,7 @@ class MainActivity : ComponentActivity() {
 
     // Handle back press
     BackHandler(enabled = currentScreenState != Screen.Search) {
-      if (currentScreenState == Screen.CustomShortcuts) {
-        currentScreenState = Screen.Settings
-      } else {
+      if (currentScreenState == Screen.Settings || currentScreenState == Screen.AppList) {
         currentScreenState = Screen.Search
         focusTrigger = System.currentTimeMillis()
       }
@@ -399,6 +398,19 @@ class MainActivity : ComponentActivity() {
     val swipeGestureEnabled =
       remember { context.dataStore.data.map { it[PreferencesKeys.SWIPE_GESTURE_ENABLED] ?: false } }
         .collectAsState(initial = false)
+
+    val isFirstRun by
+      remember { context.dataStore.data.map { it[PreferencesKeys.IS_FIRST_RUN] ?: true } }
+        .collectAsState(initial = false)
+
+    LaunchedEffect(isFirstRun) {
+      if (isFirstRun) {
+        if (managedWallpapers.isEmpty()) {
+          withContext(Dispatchers.IO) { app.wallpaperRepository.addSystemWallpaper() }
+        }
+        context.dataStore.edit { it[PreferencesKeys.IS_FIRST_RUN] = false }
+      }
+    }
 
     if (showPractice) {
       PracticeGestureScreen(onBack = { showPractice = false })
@@ -461,13 +473,9 @@ class MainActivity : ComponentActivity() {
                 onStartService = { startOverlayService() },
                 onStopService = { stopOverlayService() },
                 onOpenPractice = { showPractice = true },
-                onOpenCustomShortcuts = { currentScreenState = Screen.CustomShortcuts },
                 onBack = { currentScreenState = Screen.Search },
                 initialHighlightSection = pendingSettingsSection,
               )
-            }
-            Screen.CustomShortcuts -> {
-              CustomShortcutsScreen(onBack = { currentScreenState = Screen.Settings })
             }
             else -> {
               /* No-op */
@@ -592,6 +600,7 @@ class MainActivity : ComponentActivity() {
     val SWIPE_GESTURE_ENABLED = booleanPreferencesKey("swipe_gesture_enabled")
 
     val SHOW_WIDGETS = booleanPreferencesKey("show_widgets")
+    val IS_FIRST_RUN = booleanPreferencesKey("is_first_run")
   }
 }
 

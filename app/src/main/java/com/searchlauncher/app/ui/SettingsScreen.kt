@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -38,12 +39,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -87,7 +88,6 @@ fun SettingsScreen(
   onStartService: () -> Unit,
   onStopService: () -> Unit,
   onOpenPractice: () -> Unit,
-  onOpenCustomShortcuts: () -> Unit,
   onBack: () -> Unit,
   initialHighlightSection: String? = null,
 ) {
@@ -95,14 +95,23 @@ fun SettingsScreen(
   var showPermissionDialog by remember { mutableStateOf(false) }
   val listState = rememberLazyListState()
 
+  // Check if this app is the default launcher
+  val isDefaultLauncher = remember {
+    val intent = Intent(Intent.ACTION_MAIN)
+    intent.addCategory(Intent.CATEGORY_HOME)
+    val resolveInfo = context.packageManager.resolveActivity(intent, 0)
+    resolveInfo?.activityInfo?.packageName == context.packageName
+  }
+
   // Use LaunchedEffect to scroll to the requested section
   LaunchedEffect(initialHighlightSection) {
     if (initialHighlightSection != null) {
       val index =
         when (initialHighlightSection) {
-          "wallpaper" -> 2 // WallpaperManagementCard
-          "history" -> 5 // Search Settings
-          "snippets" -> 7 // SnippetsCard
+          "wallpaper" -> 1
+          "shortcuts" -> 2
+          "snippets" -> 3
+          "history" -> 5
           else -> -1
         }
       if (index >= 0) {
@@ -119,17 +128,9 @@ fun SettingsScreen(
   }
   val hasAccessibilityPermission = remember { isAccessibilityServiceEnabled(context) }
 
-  // Check if this app is the default launcher
-  val isDefaultLauncher = remember {
-    val intent = Intent(Intent.ACTION_MAIN)
-    intent.addCategory(Intent.CATEGORY_HOME)
-    val resolveInfo = context.packageManager.resolveActivity(intent, 0)
-    resolveInfo?.activityInfo?.packageName == context.packageName
-  }
-
   LazyColumn(
     state = listState,
-    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+    modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp),
     contentPadding = PaddingValues(bottom = 32.dp),
   ) {
@@ -146,9 +147,54 @@ fun SettingsScreen(
       }
     }
 
+    item { WallpaperManagementCard() }
+    item { CustomShortcutsCard() }
+    item { SnippetsCard() }
+
     item { ThemeSettingsCard(onNavigateToHome = onBack) }
 
-    item { WallpaperManagementCard() }
+    item {
+      Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+          modifier = Modifier.padding(16.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          Text(text = "Search Settings", style = MaterialTheme.typography.titleMedium)
+
+          val scope = rememberCoroutineScope()
+          val showHistory =
+            remember {
+                context.dataStore.data.map { it[booleanPreferencesKey("show_history")] ?: true }
+              }
+              .collectAsState(initial = true)
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(text = "Show History", style = MaterialTheme.typography.bodyMedium)
+              Text(
+                text = "Display recently used items when search is empty",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            Switch(
+              checked = showHistory.value,
+              onCheckedChange = { enabled ->
+                scope.launch {
+                  context.dataStore.edit { preferences ->
+                    preferences[booleanPreferencesKey("show_history")] = enabled
+                  }
+                }
+              },
+            )
+          }
+        }
+      }
+    }
 
     item {
       Card(modifier = Modifier.fillMaxWidth()) {
@@ -245,70 +291,6 @@ fun SettingsScreen(
           modifier = Modifier.padding(16.dp),
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Text(text = "Search Settings", style = MaterialTheme.typography.titleMedium)
-
-          val scope = rememberCoroutineScope()
-          val showHistory =
-            remember {
-                context.dataStore.data.map { it[booleanPreferencesKey("show_history")] ?: true }
-              }
-              .collectAsState(initial = true)
-
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(text = "Show History", style = MaterialTheme.typography.bodyMedium)
-              Text(
-                text = "Display recently used items when search is empty",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-            Switch(
-              checked = showHistory.value,
-              onCheckedChange = { enabled ->
-                scope.launch {
-                  context.dataStore.edit { preferences ->
-                    preferences[booleanPreferencesKey("show_history")] = enabled
-                  }
-                }
-              },
-            )
-          }
-        }
-      }
-    }
-
-    item {
-      Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-          modifier = Modifier.padding(16.dp),
-          verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-          Text(text = "Custom Shortcuts", style = MaterialTheme.typography.titleMedium)
-          Text(
-            text = "Manage your custom search shortcuts (e.g., 'r' for Reddit)",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-          Button(onClick = onOpenCustomShortcuts, modifier = Modifier.fillMaxWidth()) {
-            Text("Manage Shortcuts")
-          }
-        }
-      }
-    }
-
-    item { SnippetsCard() }
-
-    item {
-      Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-          modifier = Modifier.padding(16.dp),
-          verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
           Text(text = "Permissions", style = MaterialTheme.typography.titleMedium)
 
           PermissionStatus(
@@ -378,6 +360,7 @@ fun SettingsScreen(
     }
 
     item { BackupRestoreCard() }
+    item { AboutCard() }
   }
 
   // Show permission guide dialog
@@ -479,21 +462,34 @@ private fun SnippetsCard() {
 
   var showDialog by remember { mutableStateOf(false) }
   var editingItem by remember { mutableStateOf<com.searchlauncher.app.data.SnippetItem?>(null) }
+  var isExpanded by remember { mutableStateOf(false) }
 
   Card(modifier = Modifier.fillMaxWidth()) {
-    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        Column(modifier = Modifier.weight(1f)) {
-          Text(text = "Snippets", style = MaterialTheme.typography.titleMedium)
-          Text(
-            text = "Quick access to frequently used text snippets",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(
+          modifier = Modifier.weight(1f).clickable { isExpanded = !isExpanded },
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Icon(
+            imageVector =
+              if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
           )
+          Spacer(Modifier.width(8.dp))
+          Column {
+            Text(text = "Snippets", style = MaterialTheme.typography.titleMedium)
+            Text(
+              text = "Quick access to frequently used text snippets",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
         }
         Button(
           onClick = {
@@ -501,57 +497,67 @@ private fun SnippetsCard() {
             showDialog = true
           }
         ) {
+          Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+          Spacer(Modifier.width(8.dp))
           Text("Add")
         }
       }
 
-      // List existing items
-      if (snippetItems.value.isNotEmpty()) {
-        Text(
-          text = "${snippetItems.value.size} item${if (snippetItems.value.size != 1) "s" else ""}",
-          style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        snippetItems.value.forEach { item ->
-          Card(modifier = Modifier.fillMaxWidth()) {
-            Row(
-              modifier = Modifier.fillMaxWidth().padding(12.dp),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Column(modifier = Modifier.weight(1f)) {
-                Text(
-                  text = item.alias,
-                  style = MaterialTheme.typography.bodyLarge,
-                  fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                )
-                Text(
-                  text = item.content.take(50) + if (item.content.length > 50) "..." else "",
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-              }
-              Row {
-                IconButton(
-                  onClick = {
+      AnimatedVisibility(
+        visible = isExpanded,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+      ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          if (snippetItems.value.isNotEmpty()) {
+            snippetItems.value.forEach { item ->
+              Card(
+                modifier =
+                  Modifier.fillMaxWidth().clickable {
                     editingItem = item
                     showDialog = true
+                  },
+                colors =
+                  CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                  ),
+              ) {
+                Row(
+                  modifier = Modifier.fillMaxWidth().padding(12.dp),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                      text = item.alias,
+                      style = MaterialTheme.typography.bodyLarge,
+                      fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                      text = item.content.take(50) + if (item.content.length > 50) "..." else "",
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                   }
-                ) {
-                  Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
-                }
-                IconButton(
-                  onClick = { scope.launch { app.snippetsRepository.deleteItem(item.alias) } }
-                ) {
-                  Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.error,
-                  )
+                  IconButton(
+                    onClick = { scope.launch { app.snippetsRepository.deleteItem(item.alias) } }
+                  ) {
+                    Icon(
+                      imageVector = Icons.Default.Close,
+                      contentDescription = "Delete",
+                      tint = MaterialTheme.colorScheme.error,
+                    )
+                  }
                 }
               }
             }
+          } else {
+            Text(
+              text = "No snippets added yet.",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(vertical = 8.dp),
+            )
           }
         }
       }
@@ -570,6 +576,150 @@ private fun SnippetsCard() {
             app.snippetsRepository.addItem(alias, content)
           }
           showDialog = false
+        }
+      },
+    )
+  }
+}
+
+@Composable
+private fun CustomShortcutsCard() {
+  val context = LocalContext.current
+  val app = context.applicationContext as SearchLauncherApp
+  val shortcuts by app.searchShortcutRepository.items.collectAsState()
+  val scope = rememberCoroutineScope()
+
+  var showDialog by remember { mutableStateOf(false) }
+  var editingShortcut by remember {
+    mutableStateOf<com.searchlauncher.app.data.SearchShortcut?>(null)
+  }
+  var isExpanded by remember { mutableStateOf(false) }
+
+  Card(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Row(
+          modifier = Modifier.weight(1f).clickable { isExpanded = !isExpanded },
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Icon(
+            imageVector =
+              if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+          )
+          Spacer(Modifier.width(8.dp))
+          Column {
+            Text(text = "Custom Shortcuts", style = MaterialTheme.typography.titleMedium)
+            Text(
+              text = "Keywords for search (e.g., 'y' for YouTube)",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+        }
+        Button(
+          onClick = {
+            editingShortcut = null
+            showDialog = true
+          }
+        ) {
+          Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+          Spacer(Modifier.width(8.dp))
+          Text("Add")
+        }
+      }
+
+      AnimatedVisibility(
+        visible = isExpanded,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+      ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          TextButton(
+            onClick = { scope.launch { app.searchShortcutRepository.resetToDefaults() } },
+            modifier = Modifier.align(Alignment.End),
+          ) {
+            Text("Reset Defaults")
+          }
+
+          if (shortcuts.isNotEmpty()) {
+            shortcuts.forEach { shortcut ->
+              Card(
+                modifier =
+                  Modifier.fillMaxWidth().clickable {
+                    editingShortcut = shortcut
+                    showDialog = true
+                  },
+                colors =
+                  CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                  ),
+              ) {
+                Row(
+                  modifier = Modifier.fillMaxWidth().padding(12.dp),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                      text = shortcut.description,
+                      style = MaterialTheme.typography.bodyLarge,
+                      fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                      text = "Alias: ${shortcut.alias}",
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                  }
+                  IconButton(
+                    onClick = {
+                      scope.launch { app.searchShortcutRepository.removeShortcut(shortcut.id) }
+                    }
+                  ) {
+                    Icon(
+                      imageVector = Icons.Default.Close,
+                      contentDescription = "Delete",
+                      tint = MaterialTheme.colorScheme.error,
+                    )
+                  }
+                }
+              }
+            }
+          } else {
+            Text(
+              text = "No custom shortcuts yet.",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(vertical = 8.dp),
+            )
+          }
+        }
+      }
+    }
+  }
+
+  if (showDialog) {
+    com.searchlauncher.app.ui.components.ShortcutDialog(
+      shortcut = editingShortcut,
+      existingAliases =
+        shortcuts.map { it.alias } +
+          com.searchlauncher.app.data.DefaultShortcuts.searchShortcuts.map { it.alias },
+      onDismiss = { showDialog = false },
+      onSave = { newShortcut ->
+        scope.launch {
+          if (editingShortcut != null) {
+            app.searchShortcutRepository.updateShortcut(newShortcut)
+          } else {
+            app.searchShortcutRepository.addShortcut(newShortcut)
+          }
+          showDialog = false
+          app.searchRepository.indexCustomShortcuts()
         }
       },
     )
@@ -678,7 +828,7 @@ private fun WallpaperManagementCard() {
         ) {
           Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(Modifier.width(8.dp))
-          Text("Add Wallpapers")
+          Text("Add")
         }
       }
 
@@ -824,4 +974,47 @@ fun rememberPermissionState(check: () -> Boolean): State<Boolean> {
     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
   }
   return state
+}
+
+@Composable
+private fun AboutCard() {
+  val context = LocalContext.current
+  Card(modifier = Modifier.fillMaxWidth()) {
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(12.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+      Text(
+        text = "Made with love by Ontola",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(
+          onClick = {
+            val intent =
+              Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://play.google.com/store/apps/details?id=com.searchlauncher.app"),
+              )
+            context.startActivity(intent)
+          },
+          modifier = Modifier.weight(1f),
+        ) {
+          Text("Play Store")
+        }
+        OutlinedButton(
+          onClick = {
+            val intent =
+              Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/joepio/searchlauncher"))
+            context.startActivity(intent)
+          },
+          modifier = Modifier.weight(1f),
+        ) {
+          Text("Source code")
+        }
+      }
+    }
+  }
 }

@@ -103,7 +103,63 @@ fun FavoritesRow(
               Modifier.offset(x = animatedOffsetX)
                 .size(finalIconSize)
                 .clip(RoundedCornerShape(12.dp))
-                .graphicsLayer { alpha = if (isGhost) 0f else 1f },
+                .graphicsLayer { alpha = if (isGhost) 0f else 1f }
+                .pointerInput(result.id) { detectTapGestures(onTap = { onLaunch(result) }) }
+                .pointerInput(result.id, startX, itemWidthPx) {
+                  detectDragGesturesAfterLongPress(
+                    onDragStart = { offset ->
+                      // Re-calculate targetX to ensure freshness
+                      val freshIndex = currentOrder.indexOf(id).takeIf { it != -1 } ?: 0
+                      val freshTargetX = startX + (freshIndex * itemWidthPx)
+
+                      draggedItemId = id
+                      dragPosition = Offset(freshTargetX + offset.x, offset.y)
+                      totalDragX = 0f
+                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
+                    onDrag = { change, dragAmount ->
+                      change.consume()
+                      dragPosition += dragAmount
+                      totalDragX += abs(dragAmount.x)
+
+                      val draggedId = draggedItemId ?: return@detectDragGesturesAfterLongPress
+                      val currentIndex = currentOrder.indexOf(draggedId)
+                      if (currentIndex == -1) return@detectDragGesturesAfterLongPress
+
+                      // Target calculation uses current dragPosition relative to startX
+                      val targetIndex =
+                        ((dragPosition.x - startX) / itemWidthPx)
+                          .roundToInt()
+                          .coerceIn(0, count - 1)
+
+                      if (targetIndex != currentIndex) {
+                        val newList = currentOrder.toMutableList()
+                        val removedId = newList.removeAt(currentIndex)
+                        newList.add(targetIndex, removedId)
+                        currentOrder = newList
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                      }
+                    },
+                    onDragEnd = {
+                      val draggedId = draggedItemId
+                      val index = if (draggedId != null) currentOrder.indexOf(draggedId) else -1
+                      val dragThreshold = with(density) { 10.dp.toPx() }
+
+                      if (index != -1 && totalDragX < dragThreshold) {
+                        showMenuForIndex = index
+                      } else {
+                        onReorder(currentOrder)
+                      }
+
+                      draggedItemId = null
+                      totalDragX = 0f
+                    },
+                    onDragCancel = {
+                      draggedItemId = null
+                      totalDragX = 0f
+                    },
+                  )
+                },
             contentAlignment = Alignment.Center,
           ) {
             val imageBitmap = iconBitmaps[id]
@@ -153,85 +209,6 @@ fun FavoritesRow(
         }
       }
     }
-
-    // Gesture Detector on the Outer Box
-    // Placed AFTER visual items to catch touches on top
-    Box(
-      modifier =
-        Modifier.fillMaxWidth()
-          .height(finalIconSize) // Restrict height to icons only
-          .pointerInput(favorites, totalWidthPx) {
-            detectTapGestures(
-              onTap = { offset ->
-                if (draggedItemId == null) {
-                  // Calculate index based on startX offset
-                  val relativeX = offset.x - startX
-                  val index = (relativeX / itemWidthPx).toInt().coerceIn(0, count - 1)
-
-                  // Only trigger if within the actual content bounds
-                  if (offset.x >= startX && offset.x <= startX + contentWidthPx) {
-                    val id = currentOrder.getOrNull(index)
-                    favorites.find { it.id == id }?.let { onLaunch(it) }
-                  }
-                }
-              }
-            )
-          }
-          .pointerInput(favorites, totalWidthPx) {
-            detectDragGesturesAfterLongPress(
-              onDragStart = { offset ->
-                val relativeX = offset.x - startX
-                val index = (relativeX / itemWidthPx).toInt().coerceIn(0, count - 1)
-
-                if (offset.x >= startX && offset.x <= startX + contentWidthPx) {
-                  draggedItemId = currentOrder.getOrNull(index)
-                  dragPosition = offset // Global position
-                  totalDragX = 0f
-                  haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                }
-              },
-              onDrag = { change, dragAmount ->
-                change.consume()
-                dragPosition += dragAmount
-                totalDragX += abs(dragAmount.x)
-
-                val draggedId = draggedItemId ?: return@detectDragGesturesAfterLongPress
-                val currentIndex = currentOrder.indexOf(draggedId)
-                if (currentIndex == -1) return@detectDragGesturesAfterLongPress
-
-                // Target calculation uses current dragPosition relative to startX
-                val targetIndex =
-                  ((dragPosition.x - startX) / itemWidthPx).roundToInt().coerceIn(0, count - 1)
-
-                if (targetIndex != currentIndex) {
-                  val newList = currentOrder.toMutableList()
-                  val id = newList.removeAt(currentIndex)
-                  newList.add(targetIndex, id)
-                  currentOrder = newList
-                  haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                }
-              },
-              onDragEnd = {
-                val draggedId = draggedItemId
-                val index = if (draggedId != null) currentOrder.indexOf(draggedId) else -1
-                val dragThreshold = with(density) { 10.dp.toPx() }
-
-                if (index != -1 && totalDragX < dragThreshold) {
-                  showMenuForIndex = index
-                } else {
-                  onReorder(currentOrder)
-                }
-
-                draggedItemId = null
-                totalDragX = 0f
-              },
-              onDragCancel = {
-                draggedItemId = null
-                totalDragX = 0f
-              },
-            )
-          }
-    )
 
     // 2. Drag Overlay
     // Positioned using global coordinates derived from gesture
