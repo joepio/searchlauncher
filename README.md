@@ -17,6 +17,17 @@ Android app that lets you search everything on your phone, and more.
 - **Background image & Theme** - Customize color theme (including system dark mode) and use your own background image
 - **Quick Access to notification bar & quick settings** - With a swipe gesture from middle to the bottom, open the notification bar & quick settings.
 
+## Screenshots
+
+<p float="left">
+  <img src="screenshots/Screenshot_2025-12-23-16-16-35-170_com.searchlauncher.app.jpg" width="200" />
+  <img src="screenshots/Screenshot_2025-12-23-16-17-39-983_com.searchlauncher.app.jpg" width="200" />
+  <img src="screenshots/Screenshot_2025-12-23-16-17-51-535_com.searchlauncher.app.jpg" width="200" />
+  <img src="screenshots/Screenshot_2025-12-23-16-18-15-234_com.searchlauncher.app.jpg" width="200" />
+  <img src="screenshots/Screenshot_2025-12-23-16-18-39-420_com.searchlauncher.app.jpg" width="200" />
+  <img src="screenshots/Screenshot_2025-12-23-16-18-57-682_com.searchlauncher.app.jpg" width="200" />
+</p>
+
 ## Use as Launcher, Widget, or Overlay
 
 - **Launcher** - Use it as your default homescreen
