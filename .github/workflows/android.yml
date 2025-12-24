@@ -23,7 +23,19 @@ jobs:
         run: chmod +x gradlew
       - name: Check code formatting
         run: ./gradlew spotlessCheck
+      - name: Decode Keystore
+        if: ${{ secrets.SIGNING_KEY_STORE_BASE64 != '' }}
+        env:
+          SIGNING_KEY_STORE_BASE64: ${{ secrets.SIGNING_KEY_STORE_BASE64 }}
+        run: |
+          echo $SIGNING_KEY_STORE_BASE64 | base64 -d > app/upload.jks
+
       - name: Build with Gradle
+        env:
+          SIGNING_KEY_STORE_PATH: app/upload.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: ./gradlew build
       - name: Run unit tests
         run: ./gradlew test
