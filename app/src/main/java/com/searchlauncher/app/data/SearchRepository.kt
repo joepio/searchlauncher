@@ -131,6 +131,23 @@ class SearchRepository(private val context: Context) {
         // Perform full re-indexing in background to refresh any changes after a quiet window
         scope.launch {
           delay(2000) // Give the UI 2 seconds to load icons and settle
+
+          val prefs = context.getSharedPreferences("search_launcher_prefs", Context.MODE_PRIVATE)
+          val lastReindex = prefs.getLong("last_reindex_timestamp", 0L)
+          val currentTime = System.currentTimeMillis()
+          // Re-index only if empty or older than 4 hours
+          val isStale = (currentTime - lastReindex) > (12 * 60 * 60 * 1000)
+          val hasDocs = synchronized(documentCache) { documentCache.isNotEmpty() }
+
+          if (hasDocs && !isStale) {
+            android.util.Log.d(
+              "SearchRepository",
+              "Index is fresh (last: $lastReindex), skipping re-index",
+            )
+            return@launch
+          }
+
+          // Don't block UI with _isIndexing = true. Let it happen in bg.
           _isIndexing.value = true
           val backgroundStart = System.currentTimeMillis()
 
@@ -174,6 +191,7 @@ class SearchRepository(private val context: Context) {
               "SearchRepository",
               "Background Re-indexing took ${System.currentTimeMillis() - backgroundStart}ms",
             )
+            prefs.edit().putLong("last_reindex_timestamp", System.currentTimeMillis()).apply()
           } finally {
             _isIndexing.value = false
           }
@@ -467,7 +485,15 @@ class SearchRepository(private val context: Context) {
     withContext(Dispatchers.IO) {
       val session = appSearchSession ?: return@withContext
       try {
+        withContext(Dispatchers.Main) { _isIndexing.value = true }
+
+        // Clear manual usage persistence
+        resetUsageStats()
+        getFavoritesCacheFile().delete()
+
         documentCache.clear()
+
+        // Wipe AppSearch Data
         val setSchemaRequest = SetSchemaRequest.Builder().setForceOverride(true).build()
         session.setSchemaAsync(setSchemaRequest).get()
 
@@ -475,12 +501,25 @@ class SearchRepository(private val context: Context) {
           SetSchemaRequest.Builder().addDocumentClasses(AppSearchDocument::class.java).build()
         session.setSchemaAsync(initSchemaRequest).get()
 
+        // Clear timestamp to ensure future "fresh" checks fail until we are done
+        val prefs = context.getSharedPreferences("search_launcher_prefs", Context.MODE_PRIVATE)
+        prefs.edit().remove("last_reindex_timestamp").apply()
+
+        // Re-index everything
+        val appsStart = System.currentTimeMillis()
         indexApps()
         indexCustomShortcuts()
         indexStaticShortcuts()
         indexContacts()
+        indexSnippets()
+
+        warmupCache()
+
+        prefs.edit().putLong("last_reindex_timestamp", System.currentTimeMillis()).apply()
       } catch (e: Exception) {
         e.printStackTrace()
+      } finally {
+        withContext(Dispatchers.Main) { _isIndexing.value = false }
       }
     }
 
@@ -1521,6 +1560,11 @@ class SearchRepository(private val context: Context) {
         e.printStackTrace()
       }
     }
+  }
+
+  private fun resetUsageStats() {
+    usageStats.clear()
+    getUsageStatsFile().delete()
   }
 
   private fun loadUsageStats() {
