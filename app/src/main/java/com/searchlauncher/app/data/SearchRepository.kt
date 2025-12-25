@@ -252,22 +252,18 @@ class SearchRepository(private val context: Context) {
               val appName = info.label.toString()
               val packageName = info.componentName.packageName
 
+              val appInfo = info.applicationInfo
               val category =
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                  val appInfo = info.applicationInfo
-                  when (appInfo.category) {
-                    ApplicationInfo.CATEGORY_GAME -> "Game"
-                    ApplicationInfo.CATEGORY_AUDIO -> "Audio"
-                    ApplicationInfo.CATEGORY_VIDEO -> "Video"
-                    ApplicationInfo.CATEGORY_IMAGE -> "Image"
-                    ApplicationInfo.CATEGORY_SOCIAL -> "Social"
-                    ApplicationInfo.CATEGORY_NEWS -> "News"
-                    ApplicationInfo.CATEGORY_MAPS -> "Maps"
-                    ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Productivity"
-                    else -> "Application"
-                  }
-                } else {
-                  "Application"
+                when (appInfo.category) {
+                  ApplicationInfo.CATEGORY_GAME -> "Game"
+                  ApplicationInfo.CATEGORY_AUDIO -> "Audio"
+                  ApplicationInfo.CATEGORY_VIDEO -> "Video"
+                  ApplicationInfo.CATEGORY_IMAGE -> "Image"
+                  ApplicationInfo.CATEGORY_SOCIAL -> "Social"
+                  ApplicationInfo.CATEGORY_NEWS -> "News"
+                  ApplicationInfo.CATEGORY_MAPS -> "Maps"
+                  ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Productivity"
+                  else -> "Application"
                 }
 
               apps.add(
@@ -506,7 +502,7 @@ class SearchRepository(private val context: Context) {
         prefs.edit().remove("last_reindex_timestamp").apply()
 
         // Re-index everything
-        val appsStart = System.currentTimeMillis()
+
         indexApps()
         indexCustomShortcuts()
         indexStaticShortcuts()
@@ -1081,7 +1077,7 @@ class SearchRepository(private val context: Context) {
         icon = icon,
         packageName = shortcut.packageName ?: "android",
         deepLink = deepLink, // Use custom deepLink
-        rankingScore = 150,
+        rankingScore = if (searchTerm.isBlank()) 150 else 1200,
       )
     )
 
