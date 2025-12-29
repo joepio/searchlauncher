@@ -1,5 +1,6 @@
 package com.searchlauncher.app.data
 
+import android.annotation.SuppressLint
 import android.app.WallpaperManager
 import android.content.Context
 import android.graphics.Bitmap
@@ -78,6 +79,7 @@ class WallpaperRepository(private val context: Context) {
     }
   }
 
+  @SuppressLint("MissingPermission")
   fun addSystemWallpaper(): Boolean {
     return try {
       val wallpaperManager = WallpaperManager.getInstance(context)

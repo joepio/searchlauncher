@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-@android.annotation.SuppressLint("FlowOperatorInvokedInComposition")
+@android.annotation.SuppressLint("FlowOperatorInvokedInComposition", "RestrictedApi")
 fun ThemeSettingsCard(onNavigateToHome: () -> Unit) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
