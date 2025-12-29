@@ -601,6 +601,7 @@ class MainActivity : ComponentActivity() {
 
     val SHOW_WIDGETS = booleanPreferencesKey("show_widgets")
     val IS_FIRST_RUN = booleanPreferencesKey("is_first_run")
+    val STORE_WEB_HISTORY = booleanPreferencesKey("store_web_history")
   }
 }
 

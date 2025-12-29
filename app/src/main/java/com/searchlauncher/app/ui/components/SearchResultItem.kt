@@ -44,6 +44,7 @@ fun SearchResultItem(
   onCreateSnippet: (() -> Unit)? = null,
   onEditShortcut: (() -> Unit)? = null,
   onDeleteShortcut: (() -> Unit)? = null,
+  onRemoveFromIndex: (() -> Unit)? = null,
   onClick: () -> Unit,
 ) {
   var showMenu by remember { mutableStateOf(false) }
@@ -174,6 +175,17 @@ fun SearchResultItem(
             text = { Text("Remove Shortcut") },
             onClick = {
               onDeleteShortcut.invoke()
+              showMenu = false
+            },
+            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+          )
+        }
+
+        if (onRemoveFromIndex != null) {
+          DropdownMenuItem(
+            text = { Text("Remove from Index") },
+            onClick = {
+              onRemoveFromIndex()
               showMenu = false
             },
             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },

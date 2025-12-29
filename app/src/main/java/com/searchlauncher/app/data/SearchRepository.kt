@@ -16,6 +16,8 @@ import androidx.appsearch.app.SearchSpec
 import androidx.appsearch.app.SetSchemaRequest
 import androidx.appsearch.localstorage.LocalStorage
 import com.searchlauncher.app.SearchLauncherApp
+import com.searchlauncher.app.ui.MainActivity
+import com.searchlauncher.app.ui.dataStore
 import com.searchlauncher.app.util.FuzzyMatch
 import com.searchlauncher.app.util.StaticShortcutScanner
 import java.io.File
@@ -30,6 +32,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -612,11 +616,28 @@ class SearchRepository(private val context: Context) {
     withContext(Dispatchers.IO) {
       val session = appSearchSession ?: return@withContext
       try {
-        val request =
-          androidx.appsearch.app.ReportUsageRequest.Builder(namespace, id)
-            .setUsageTimestampMillis(System.currentTimeMillis())
-            .build()
-        session.reportUsageAsync(request).get()
+        android.util.Log.d(
+          "SearchRepository",
+          "reportUsage: namespace=$namespace, id=$id, query=$query",
+        )
+
+        // Only report usage to AppSearch for namespaces that are actually in the index.
+        // smart_actions and others are dynamic and will cause reportUsageAsync to fail.
+        if (namespace != "smart_actions" && namespace != "snippets") {
+          try {
+            val request =
+              androidx.appsearch.app.ReportUsageRequest.Builder(namespace, id)
+                .setUsageTimestampMillis(System.currentTimeMillis())
+                .build()
+            session.reportUsageAsync(request).get()
+          } catch (e: Exception) {
+            // Not in index or other issue, ignore
+            android.util.Log.w(
+              "SearchRepository",
+              "AppSearch reportUsage failed for $namespace:$id",
+            )
+          }
+        }
 
         // Manual usage persistence
         val count = usageStats[id] ?: 0
@@ -633,8 +654,98 @@ class SearchRepository(private val context: Context) {
         }
 
         lastUsageReportTime = System.currentTimeMillis()
+
+        // Auto-bookmark clicked URLs - Use repository scope to ensure it survives UI destruction
+        if (id.startsWith("smart_action_url_")) {
+          val url = id.removePrefix("smart_action_url_").trim()
+          scope.launch {
+            android.util.Log.d("SearchRepository", "Found smart action URL, indexing: $url")
+            indexWebUrl(url)
+          }
+        }
       } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.e("SearchRepository", "Error reporting usage", e)
+      }
+    }
+
+  suspend fun indexWebUrl(url: String, title: String? = null) =
+    withContext(Dispatchers.IO) {
+      val session =
+        appSearchSession
+          ?: run {
+            android.util.Log.e("SearchRepository", "indexWebUrl: session is null")
+            return@withContext
+          }
+
+      val trimmedUrl = url.trim()
+      if (trimmedUrl.isEmpty()) return@withContext
+
+      // Use DataStore for preference
+      val shouldStore =
+        try {
+          context.dataStore.data
+            .map { it[MainActivity.PreferencesKeys.STORE_WEB_HISTORY] ?: true }
+            .first()
+        } catch (e: Exception) {
+          android.util.Log.e("SearchRepository", "Error reading store_web_history pref", e)
+          true // Proceed if DataStore fails
+        }
+
+      if (!shouldStore) {
+        android.util.Log.d("SearchRepository", "Web history storage is disabled in settings")
+        return@withContext
+      }
+
+      val displayTitle =
+        title ?: trimmedUrl.removePrefix("https://").removePrefix("http://").removeSuffix("/")
+
+      val doc =
+        AppSearchDocument(
+          namespace = "web_bookmarks",
+          id = "web_${trimmedUrl.hashCode()}",
+          name = displayTitle,
+          score = 1,
+          intentUri = if (!trimmedUrl.startsWith("http")) "https://$trimmedUrl" else trimmedUrl,
+          description = trimmedUrl,
+        )
+
+      try {
+        android.util.Log.d(
+          "SearchRepository",
+          "Actually putting web doc into AppSearch: ${doc.id} ($trimmedUrl)",
+        )
+        val request = PutDocumentsRequest.Builder().addDocuments(doc).build()
+        val result = session.putAsync(request).get()
+
+        if (result.isSuccess) {
+          android.util.Log.d("SearchRepository", "Successfully indexed $trimmedUrl")
+        } else {
+          android.util.Log.e("SearchRepository", "Failed to index $trimmedUrl: ${result.failures}")
+        }
+
+        synchronized(documentCache) {
+          documentCache.removeAll { it.id == doc.id }
+          documentCache.add(doc)
+        }
+        _indexUpdated.emit(Unit)
+      } catch (e: Exception) {
+        android.util.Log.e("SearchRepository", "Exception in indexWebUrl for $trimmedUrl", e)
+      }
+    }
+
+  suspend fun removeFromIndex(namespace: String, id: String) =
+    withContext(Dispatchers.IO) {
+      val session = appSearchSession ?: return@withContext
+      try {
+        val request =
+          androidx.appsearch.app.RemoveByDocumentIdRequest.Builder(namespace).addIds(id).build()
+        session.removeAsync(request).get()
+        synchronized(documentCache) {
+          documentCache.removeAll { it.namespace == namespace && it.id == id }
+        }
+        _indexUpdated.emit(Unit)
+      } catch (e: Exception) {
+        android.util.Log.e("SearchRepository", "Error removing from index", e)
       }
     }
 
@@ -1126,7 +1237,12 @@ class SearchRepository(private val context: Context) {
         // Include search_shortcuts so we can show them even for short queries if needed,
         // or if we want fallbacks. But standard logic allows search_shortcuts.
         // Just list namespaces explicitly to avoid expensive contacts if short.
-        searchSpecBuilder.addFilterNamespaces("apps", "app_shortcuts", "search_shortcuts")
+        searchSpecBuilder.addFilterNamespaces(
+          "apps",
+          "app_shortcuts",
+          "search_shortcuts",
+          "web_bookmarks",
+        )
       }
 
       val searchSpec = searchSpecBuilder.build()
@@ -1142,20 +1258,25 @@ class SearchRepository(private val context: Context) {
 
       val searchResults = session.search(finalQuery, searchSpec)
       var nextPage = searchResults.nextPageAsync.get()
+      android.util.Log.d(
+        "SearchRepository",
+        "AppSearch query: '$finalQuery', found first page size: ${nextPage.size}",
+      )
 
       while (nextPage.isNotEmpty()) {
         for (result in nextPage) {
           val doc = result.genericDocument.toDocumentClass(AppSearchDocument::class.java)
           val manualUsage = usageStats[doc.id] ?: 0
-          val baseScore = result.rankingSignal.toInt() + (manualUsage * 2)
+          val baseScore = (result.rankingSignal.toInt() + (manualUsage * 2)).coerceAtLeast(0)
+
           val isSettings =
             doc.id == "com.android.settings" ||
               doc.intentUri?.contains("android.settings.SETTINGS") == true
-          val isShortcut = doc.namespace == "shortcuts" || doc.namespace == "static_shortcuts"
           val boost =
             when {
               isSettings -> 15
               doc.namespace == "apps" -> 100
+              doc.namespace == "web_bookmarks" -> 80 // Strong boost for bookmarks
               else -> 0
             }
 
@@ -1397,6 +1518,21 @@ class SearchRepository(private val context: Context) {
           subtitle = "Type '${doc.description} ' to search",
           icon = icon,
           trigger = doc.description ?: "",
+          rankingScore = rankingScore,
+        )
+      }
+      "web_bookmarks" -> {
+        val browserIcon =
+          context.getDrawable(android.R.drawable.ic_menu_compass)
+            ?: context.getDrawable(android.R.drawable.ic_menu_search)
+        SearchResult.Content(
+          id = doc.id,
+          namespace = "web_bookmarks",
+          title = doc.name,
+          subtitle = "Bookmark",
+          icon = browserIcon,
+          packageName = "com.android.chrome",
+          deepLink = doc.intentUri,
           rankingScore = rankingScore,
         )
       }

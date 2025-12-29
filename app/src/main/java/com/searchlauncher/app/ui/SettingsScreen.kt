@@ -168,6 +168,14 @@ fun SettingsScreen(
               }
               .collectAsState(initial = true)
 
+          val storeWebHistory =
+            remember {
+                context.dataStore.data.map {
+                  it[MainActivity.PreferencesKeys.STORE_WEB_HISTORY] ?: true
+                }
+              }
+              .collectAsState(initial = true)
+
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -187,6 +195,31 @@ fun SettingsScreen(
                 scope.launch {
                   context.dataStore.edit { preferences ->
                     preferences[booleanPreferencesKey("show_history")] = enabled
+                  }
+                }
+              },
+            )
+          }
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(text = "Store Web History", style = MaterialTheme.typography.bodyMedium)
+              Text(
+                text = "Automatically bookmark visited websites from search",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            Switch(
+              checked = storeWebHistory.value,
+              onCheckedChange = { enabled ->
+                scope.launch {
+                  context.dataStore.edit { preferences ->
+                    preferences[MainActivity.PreferencesKeys.STORE_WEB_HISTORY] = enabled
                   }
                 }
               },
