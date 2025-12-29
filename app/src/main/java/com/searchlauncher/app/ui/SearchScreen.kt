@@ -598,6 +598,12 @@ fun SearchScreen(
                           }
                         }
                       } else null,
+                    onRemoveBookmark = {
+                      scope.launch {
+                        searchRepository.removeBookmark(result.id)
+                        onQueryChange("") // Refresh
+                      }
+                    },
                     onEditSnippet =
                       if (result is SearchResult.Snippet) {
                         {

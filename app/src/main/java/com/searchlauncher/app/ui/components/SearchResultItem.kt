@@ -45,6 +45,7 @@ fun SearchResultItem(
   onEditShortcut: (() -> Unit)? = null,
   onDeleteShortcut: (() -> Unit)? = null,
   onRemoveFromIndex: (() -> Unit)? = null,
+  onRemoveBookmark: (() -> Unit)? = null,
   onClick: () -> Unit,
 ) {
   var showMenu by remember { mutableStateOf(false) }
@@ -59,6 +60,7 @@ fun SearchResultItem(
             } else if (
               result is SearchResult.Snippet ||
                 result is SearchResult.App ||
+                result.namespace == "web_bookmarks" ||
                 onEditShortcut != null ||
                 onDeleteShortcut != null
             ) {
@@ -244,6 +246,17 @@ fun SearchResultItem(
                 Toast.makeText(context, "Cannot start uninstall: ${e.message}", Toast.LENGTH_SHORT)
                   .show()
               }
+              showMenu = false
+            },
+            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+          )
+        }
+
+        if (onRemoveBookmark != null && result.namespace == "web_bookmarks") {
+          DropdownMenuItem(
+            text = { Text("Remove Bookmark") },
+            onClick = {
+              onRemoveBookmark()
               showMenu = false
             },
             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },

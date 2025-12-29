@@ -1018,6 +1018,28 @@ class SearchRepository(private val context: Context) {
       }
     }
 
+  suspend fun removeBookmark(id: String) =
+    withContext(Dispatchers.IO) {
+      val session = appSearchSession ?: return@withContext
+      try {
+        val request =
+          androidx.appsearch.app.RemoveByDocumentIdRequest.Builder("web_bookmarks")
+            .addIds(id)
+            .build()
+        session.removeAsync(request).get()
+        android.util.Log.d("SearchRepository", "Removed bookmark: $id")
+
+        // Clear document cache entry if it exists
+        synchronized(documentCache) {
+          documentCache.removeAll { it.id == id && it.namespace == "web_bookmarks" }
+        }
+
+        _indexUpdated.emit(Unit)
+      } catch (e: Exception) {
+        android.util.Log.e("SearchRepository", "Failed to remove bookmark: $id", e)
+      }
+    }
+
   suspend fun indexSnippets() =
     withContext(Dispatchers.IO) {
       val session = appSearchSession ?: return@withContext
@@ -1359,7 +1381,7 @@ class SearchRepository(private val context: Context) {
         for (result in nextPage) {
           val doc = result.genericDocument.toDocumentClass(AppSearchDocument::class.java)
           val manualUsage = usageStats[doc.id] ?: 0
-          val baseScore = (result.rankingSignal.toInt() + (manualUsage * 2)).coerceAtLeast(0)
+          val baseScore = (result.rankingSignal.toInt() + (manualUsage * 10)).coerceAtLeast(0)
 
           val isSettings =
             doc.id == "com.android.settings" ||
