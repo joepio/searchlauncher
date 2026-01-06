@@ -1363,8 +1363,14 @@ internal fun Drawable.toImageBitmap(): ImageBitmap? {
           null
         }
       } else {
-        val width = intrinsicWidth.takeIf { it > 0 } ?: 1
-        val height = intrinsicHeight.takeIf { it > 0 } ?: 1
+        // Enforce a minimum reasonable size if intrinsic dimensions are missing
+        val validWidth = intrinsicWidth.takeIf { it > 0 } ?: 192
+        val validHeight = intrinsicHeight.takeIf { it > 0 } ?: 192
+
+        // Ensure we don't end up with a tiny 1x1 bitmap if dimensions were missing
+        val width = validWidth
+        val height = validHeight
+
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         setBounds(0, 0, canvas.width, canvas.height)

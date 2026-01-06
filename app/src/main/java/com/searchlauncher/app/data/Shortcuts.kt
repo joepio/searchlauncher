@@ -254,6 +254,12 @@ object DefaultShortcuts {
           "intent:#Intent;action=com.searchlauncher.action.RESET_ONBOARDING;component=com.searchlauncher.app/.ui.MainActivity;end",
         description = "Start Onboarding",
       ),
+      AppShortcut.Action(
+        id = "launcher_refresh_icons",
+        intentUri =
+          "intent:#Intent;action=com.searchlauncher.action.REFRESH_ICONS;component=com.searchlauncher.app/.ui.MainActivity;end",
+        description = "Refresh Icons",
+      ),
     ) + generateSettingsShortcuts()
 
   // User-editable search shortcuts with default aliases

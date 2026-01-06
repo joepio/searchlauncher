@@ -86,7 +86,12 @@ fun SearchResultItem(
             }
           val imageBitmap = remember(result.icon) { result.icon?.toImageBitmap() }
           if (imageBitmap != null) {
-            Image(bitmap = imageBitmap, contentDescription = null, modifier = iconModifier)
+            Image(
+              bitmap = imageBitmap,
+              contentDescription = null,
+              modifier = iconModifier,
+              contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            )
           }
         }
 

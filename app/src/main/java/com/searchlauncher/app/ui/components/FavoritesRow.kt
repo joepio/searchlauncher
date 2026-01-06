@@ -288,6 +288,7 @@ fun FavoritesRow(
               Image(
                 bitmap = imageBitmap,
                 contentDescription = result.title,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                 modifier = Modifier.size(finalIconSize * 0.8f),
               )
             } else {
@@ -382,6 +383,7 @@ fun FavoritesRow(
           Image(
             bitmap = imageBitmap,
             contentDescription = result.title,
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
             modifier = Modifier.size(finalIconSize * 0.8f),
           )
         }

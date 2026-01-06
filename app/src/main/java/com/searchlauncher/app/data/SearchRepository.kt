@@ -1886,12 +1886,33 @@ class SearchRepository(private val context: Context) {
             icon = diskIcon
             iconCache.put("app_$packageName", icon)
           } else {
-            // Fallback to PackageManager (slow IPC)
+            // Use LauncherApps to get the proper badged icon (better than plain PackageManager)
             try {
-              icon = context.packageManager.getApplicationIcon(packageName)
-              iconCache.put("app_$packageName", icon)
-              // Save to disk for next time
-              saveIconToDisk(packageName, icon)
+              val launcherApps =
+                context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
+                  as android.content.pm.LauncherApps
+              val user = android.os.Process.myUserHandle()
+              val activities = launcherApps.getActivityList(packageName, user)
+              if (activities.isNotEmpty()) {
+                val info = activities[0]
+                // 0 means use default density. This returns a "full" icon potentially, but properly
+                // badged.
+                // However, LauncherActivityInfo.getIcon(density) returns a Drawable.
+                // It usually handles AdaptiveIcons correctly by returning a Drawable that renders
+                // correctly.
+                icon = info.getIcon(context.resources.displayMetrics.densityDpi)
+              }
+
+              if (icon == null) {
+                // Fallback
+                icon = context.packageManager.getApplicationIcon(packageName)
+              }
+
+              if (icon != null) {
+                iconCache.put("app_$packageName", icon)
+                // Save to disk for next time
+                saveIconToDisk(packageName, icon)
+              }
             } catch (e: Exception) {
               // Ignore
             }
@@ -2098,15 +2119,16 @@ class SearchRepository(private val context: Context) {
     val file = File(getIconDir(), "${sanitizeId(id)}.png")
     try {
       val bitmap =
-        if (drawable is BitmapDrawable) {
+        if (drawable is BitmapDrawable && drawable.bitmap != null && !drawable.bitmap.isRecycled) {
           drawable.bitmap
         } else {
-          val b =
-            Bitmap.createBitmap(
-              drawable.intrinsicWidth.coerceAtLeast(1),
-              drawable.intrinsicHeight.coerceAtLeast(1),
-              Bitmap.Config.ARGB_8888,
-            )
+          // Force a reasonable size for AdaptiveIcons or vector drawables
+          // 192x192 is generally safe for high density icons
+          val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 192
+          val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 192
+          val size = maxOf(width, height, 192) // Ensure at least 192px
+
+          val b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
           val canvas = Canvas(b)
           drawable.setBounds(0, 0, canvas.width, canvas.height)
           drawable.draw(canvas)
@@ -2116,6 +2138,14 @@ class SearchRepository(private val context: Context) {
     } catch (e: Exception) {
       e.printStackTrace()
     }
+  }
+
+  fun clearIconCache() {
+    iconCache.evictAll()
+    getIconDir().deleteRecursively()
+    getIconDir().mkdirs()
+    // Trigger index mismatch to force redraws if possible?
+    // Actually, callers will need to invalidate their state.
   }
 
   private fun loadIconFromDisk(id: String): Drawable? {

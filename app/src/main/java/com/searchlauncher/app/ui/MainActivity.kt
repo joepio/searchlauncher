@@ -40,9 +40,19 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "se
 
 class MainActivity : ComponentActivity() {
 
+  // Export state
+  var exportIncludeWallpapers = true
+  var exportWallpaperSize = 0L
+  var showExportDialog by mutableStateOf(false)
+  var showImportConfirmation by mutableStateOf(false)
+  var pendingImportUri: Uri? = null
+
   private val exportBackupLauncher =
-    registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-      uri?.let { lifecycleScope.launch { performExport(it) } }
+    registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) {
+      uri ->
+      if (uri != null) {
+        lifecycleScope.launch { performExport(uri) }
+      }
     }
 
   private val importBackupLauncher =
@@ -234,12 +244,6 @@ class MainActivity : ComponentActivity() {
   private var currentScreenState by mutableStateOf(Screen.Search)
   private var pendingSettingsSection by mutableStateOf<String?>(null)
   private var focusTrigger by mutableStateOf(0L)
-  private var showImportConfirmation by mutableStateOf(false)
-  private var pendingImportUri by mutableStateOf<Uri?>(null)
-
-  internal var showExportDialog by mutableStateOf(false)
-  internal var exportIncludeWallpapers by mutableStateOf(true)
-  private var exportWallpaperSize by mutableStateOf(0L)
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
@@ -294,6 +298,14 @@ class MainActivity : ComponentActivity() {
 
     if (intent.action == "com.searchlauncher.action.IMPORT_BACKUP") {
       importBackupLauncher.launch(arrayOf("*/*")) // Allow user to pick file
+      return
+    }
+
+    if (intent.action == "com.searchlauncher.action.REFRESH_ICONS") {
+      val app = application as SearchLauncherApp
+      app.searchRepository.clearIconCache()
+      Toast.makeText(this, "Icons Refreshed", Toast.LENGTH_SHORT).show()
+      // Force UI refresh if needed, but clearing cache + eventual reload should suffice
       return
     }
 
