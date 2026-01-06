@@ -496,7 +496,7 @@ fun SearchScreen(
         TutorialOverlay(
           currentStep = currentOnboardingStep,
           bottomPadding = bottomPadding,
-          onDismissStep = { /* optional manual dismiss */ },
+          onDismissStep = { /* optional manual dismiss */},
         )
       }
 

@@ -218,7 +218,7 @@ fun SettingsScreen(
 
                 if (isSelected) {
                   Button(
-                    onClick = { /* Already selected */ },
+                    onClick = { /* Already selected */},
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                   ) {
