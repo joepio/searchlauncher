@@ -108,12 +108,16 @@ fun SearchScreen(
     remember { context.dataStore.data.map { it[PreferencesKeys.HISTORY_LIMIT] ?: -1 } }
       .collectAsState(initial = -1)
   val minIconSizeSetting by
-    remember { context.dataStore.data.map { it[PreferencesKeys.MIN_ICON_SIZE] ?: 36 } }
+    remember {
+        context.dataStore.data.map {
+          it[PreferencesKeys.MIN_ICON_SIZE] ?: PreferencesKeys.getDefaultIconSize(context)
+        }
+      }
       .collectAsState(
         initial =
           context
             .getSharedPreferences("search_launcher_prefs", Context.MODE_PRIVATE)
-            .getInt("min_icon_size", 36)
+            .getInt("min_icon_size", PreferencesKeys.getDefaultIconSize(context))
       )
 
   // Sync back to SharedPreferences for faster boot next time

@@ -249,8 +249,13 @@ fun SettingsScreen(
 
             AnimatedVisibility(visible = historyLimit.value != 0) {
               val minIconSize =
-                remember { context.dataStore.data.map { it[PreferencesKeys.MIN_ICON_SIZE] ?: 36 } }
-                  .collectAsState(initial = 36)
+                remember {
+                    context.dataStore.data.map {
+                      it[PreferencesKeys.MIN_ICON_SIZE]
+                        ?: PreferencesKeys.getDefaultIconSize(context)
+                    }
+                  }
+                  .collectAsState(initial = PreferencesKeys.getDefaultIconSize(context))
 
               val appIcon = remember {
                 try {

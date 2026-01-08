@@ -34,7 +34,10 @@ android {
 
   buildTypes {
     release {
-      isMinifyEnabled = false
+      // Enable R8 only if the 'minifyRelease' property is passed (e.g. in CI)
+      val enableR8 = project.hasProperty("minifyRelease")
+      isMinifyEnabled = enableR8
+      isShrinkResources = enableR8
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }

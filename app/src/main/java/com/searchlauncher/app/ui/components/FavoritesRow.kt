@@ -40,7 +40,7 @@ fun FavoritesRow(
   favorites: List<SearchResult>,
   history: List<SearchResult> = emptyList(),
   historyLimit: Int = -1,
-  minIconSizeSetting: Int = 36,
+  minIconSizeSetting: Int = 48,
   onLaunch: (SearchResult) -> Unit,
   onToggleFavorite: (SearchResult) -> Unit,
   onReorder: (List<String>) -> Unit,

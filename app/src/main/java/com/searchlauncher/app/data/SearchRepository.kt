@@ -2095,7 +2095,9 @@ class SearchRepository(private val context: Context) {
 
   private fun saveIconToDisk(id: String, drawable: Drawable?) {
     if (drawable == null) return
-    val file = File(getIconDir(), "${sanitizeId(id)}.png")
+    val targetFile = File(getIconDir(), "${sanitizeId(id)}.png")
+    val tmpFile = File(getIconDir(), "${sanitizeId(id)}.tmp")
+
     try {
       val bitmap =
         if (drawable is BitmapDrawable && drawable.bitmap != null && !drawable.bitmap.isRecycled) {
@@ -2113,9 +2115,23 @@ class SearchRepository(private val context: Context) {
           drawable.draw(canvas)
           b
         }
-      FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out) }
+
+      // Write to temp file first to avoid partial writes (race condition)
+      FileOutputStream(tmpFile).use { out ->
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        out.flush()
+      }
+
+      // Atomic replacement
+      if (tmpFile.exists() && tmpFile.length() > 0) {
+        if (targetFile.exists()) {
+          targetFile.delete()
+        }
+        tmpFile.renameTo(targetFile)
+      }
     } catch (e: Exception) {
       e.printStackTrace()
+      tmpFile.delete()
     }
   }
 

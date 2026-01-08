@@ -3,4 +3,4 @@
 # proguardFiles setting in build.gradle.
 
 # Keep AppSearch entities
--keep class * extends androidx.appsearch.annotation.Document { *; }
+-keep @androidx.appsearch.annotation.Document class * { *; }

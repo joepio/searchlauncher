@@ -17,4 +17,9 @@ object PreferencesKeys {
   val STORE_WEB_HISTORY = booleanPreferencesKey("store_web_history")
   val HISTORY_LIMIT = intPreferencesKey("history_limit")
   val MIN_ICON_SIZE = intPreferencesKey("min_icon_size")
+
+  fun getDefaultIconSize(context: android.content.Context): Int {
+    val config = context.resources.configuration
+    return if (config.smallestScreenWidthDp >= 600) 48 else 32
+  }
 }
