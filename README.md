@@ -15,6 +15,7 @@ Android app that lets you search everything on your phone, and more.
 - **Voice search** - Tap the mic to speak your query
 - **Snippets** - Fast access to frequently used text snippets
 - **Quick Access to notification bar & quick settings** - With a swipe gesture from middle to the bottom, open the notification bar & quick settings.
+- **Export & Import** - Backup your settings and wallpapers
 
 ## Screenshots
 
