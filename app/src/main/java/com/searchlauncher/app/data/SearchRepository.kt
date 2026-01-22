@@ -31,7 +31,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -55,7 +57,7 @@ class SearchRepository(private val context: Context) {
   private val executor = Executors.newSingleThreadExecutor()
   private val smartActionManager = SmartActionManager(context)
   private val iconGenerator = SearchIconGenerator(context)
-  private val iconCache = LruCache<String, Drawable>(200)
+  private val iconCache = LruCache<String, Drawable>(10000)
 
   // LRU cache for single-letter search queries
   private val searchCache =
@@ -705,7 +707,12 @@ class SearchRepository(private val context: Context) {
       }
     }
 
-  suspend fun getResults(ids: List<String>, limit: Int = 100): List<SearchResult> =
+  suspend fun getResults(
+    ids: List<String>,
+    limit: Int = 100,
+    allowIpc: Boolean = true,
+    allowDisk: Boolean = true,
+  ): List<SearchResult> =
     withContext(Dispatchers.IO) {
       if (ids.isEmpty()) return@withContext emptyList()
       val targetIds = ids.take(limit)
@@ -750,7 +757,15 @@ class SearchRepository(private val context: Context) {
           }
         } else cachedDocs
 
-      finalDocs.map { convertDocumentToResult(it, 100) }
+      finalDocs.map {
+        convertDocumentToResult(
+          it,
+          100,
+          saveToDisk = true,
+          allowIpc = allowIpc,
+          allowDisk = allowDisk,
+        )
+      }
     }
 
   suspend fun getRecentItems(
@@ -779,7 +794,11 @@ class SearchRepository(private val context: Context) {
       return@withContext results
     }
 
-  suspend fun getSearchShortcuts(limit: Int = 100): List<SearchResult> =
+  suspend fun getSearchShortcuts(
+    limit: Int = 100,
+    allowIpc: Boolean = true,
+    allowDisk: Boolean = true,
+  ): List<SearchResult> =
     withContext(Dispatchers.IO) {
       try {
         // Get all search shortcuts from synchronized documentCache
@@ -794,7 +813,17 @@ class SearchRepository(private val context: Context) {
 
         return@withContext coroutineScope {
           sortedShortcuts
-            .map { doc -> async { convertDocumentToResult(doc, 100) } }
+            .map { doc ->
+              async {
+                convertDocumentToResult(
+                  doc,
+                  100,
+                  saveToDisk = true,
+                  allowIpc = allowIpc,
+                  allowDisk = allowDisk,
+                )
+              }
+            }
             .awaitAll()
             .filterIsInstance<SearchResult.SearchIntent>()
             .take(limit)
@@ -1239,7 +1268,9 @@ class SearchRepository(private val context: Context) {
             synchronized(documentCache) {
               documentCache.filter { it.namespace == "apps" }.sortedBy { it.name.lowercase() }
             }
-          docs.map { doc -> async { convertDocumentToResult(doc, 0) } }.awaitAll()
+          docs
+            .map { doc -> async { convertDocumentToResult(doc, 0, saveToDisk = true) } }
+            .awaitAll()
         }
       }
     _allApps.emit(apps)
@@ -1252,7 +1283,12 @@ class SearchRepository(private val context: Context) {
     return _allApps.value
   }
 
-  suspend fun searchApps(query: String, limit: Int = -1): List<SearchResult> =
+  suspend fun searchApps(
+    query: String,
+    limit: Int = -1,
+    allowIpc: Boolean = true,
+    allowDisk: Boolean = true,
+  ): List<SearchResult> =
     withContext(Dispatchers.IO) {
       val startTime = System.currentTimeMillis()
       val session = appSearchSession
@@ -1288,7 +1324,9 @@ class SearchRepository(private val context: Context) {
           .mapNotNull { it.trigger }
           .toSet()
 
-      results.addAll(searchAppIndex(query, excludedAliases, limit))
+      results.addAll(
+        searchAppIndex(query, excludedAliases, limit, allowIpc = allowIpc, allowDisk = allowDisk)
+      )
 
       results.sortByDescending { it.rankingScore }
 
@@ -1476,6 +1514,8 @@ class SearchRepository(private val context: Context) {
     query: String,
     excludedAliases: Set<String>,
     limit: Int,
+    allowIpc: Boolean = true,
+    allowDisk: Boolean = true,
   ): List<SearchResult> {
     val startTime = System.currentTimeMillis()
     val session = appSearchSession ?: return emptyList()
@@ -1549,7 +1589,16 @@ class SearchRepository(private val context: Context) {
       val conversionLimit = if (limit > 0) limit * 2 else 50
 
       for ((doc, score) in candidates.take(conversionLimit)) {
-        val searchResult = convertDocumentToResult(doc, score, query)
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        val searchResult =
+          convertDocumentToResult(
+            doc,
+            score,
+            query,
+            saveToDisk = false,
+            allowIpc = allowIpc,
+            allowDisk = allowDisk,
+          )
 
         if (searchResult is SearchResult.SearchIntent && searchResult.trigger in excludedAliases) {
           continue
@@ -1576,9 +1625,18 @@ class SearchRepository(private val context: Context) {
 
         val addedIds = mutableSetOf<String>()
         for ((doc, _) in fuzzyMatches) {
+          kotlinx.coroutines.currentCoroutineContext().ensureActive()
           if (doc.id !in existingIds && doc.id !in addedIds) {
             val boost = if (doc.namespace == "apps") 100 else 0
-            val result = convertDocumentToResult(doc, boost, query)
+            val result =
+              convertDocumentToResult(
+                doc,
+                boost,
+                query,
+                saveToDisk = allowIpc,
+                allowIpc = allowIpc,
+                allowDisk = allowDisk,
+              )
             appSearchResults.add(result)
             addedIds.add(doc.id)
           }
@@ -1652,48 +1710,76 @@ class SearchRepository(private val context: Context) {
     doc: AppSearchDocument,
     rankingScore: Int,
     query: String? = null,
+    saveToDisk: Boolean = false,
+    allowIpc: Boolean = true,
+    allowDisk: Boolean = true,
   ): SearchResult {
+    kotlinx.coroutines.currentCoroutineContext().ensureActive()
     return when (doc.namespace) {
       "shortcuts" -> {
         var icon: Drawable? = iconCache.get("shortcut_${doc.id}")
         if (icon == null) {
-          try {
-            val launcherApps =
-              context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
-                as android.content.pm.LauncherApps
-            val user = android.os.Process.myUserHandle()
-            val q = android.content.pm.LauncherApps.ShortcutQuery()
-            val packageName = doc.id.split("/").firstOrNull() ?: ""
-            val shortcutId = doc.id.substringAfter("/")
-            q.setPackage(packageName)
-            q.setShortcutIds(listOf(shortcutId))
-            q.setQueryFlags(
-              android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
-                android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
-                android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
-            )
-            val shortcuts = launcherApps.getShortcuts(q, user)
-            if (shortcuts != null && shortcuts.isNotEmpty()) {
-              icon =
-                launcherApps.getShortcutIconDrawable(
-                  shortcuts[0],
-                  context.resources.displayMetrics.densityDpi,
-                )
-              if (icon != null) {
-                iconCache.put("shortcut_${doc.id}", icon)
+          val diskIcon = if (allowDisk) loadIconFromDisk("shortcut_${doc.id}") else null
+          if (diskIcon != null) {
+            icon = diskIcon
+            iconCache.put("shortcut_${doc.id}", icon)
+          } else if (allowIpc) {
+            try {
+              val launcherApps =
+                context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
+                  as android.content.pm.LauncherApps
+              val user = android.os.Process.myUserHandle()
+              val q = android.content.pm.LauncherApps.ShortcutQuery()
+              val packageName = doc.id.split("/").firstOrNull() ?: ""
+              val shortcutId = doc.id.substringAfter("/")
+              q.setPackage(packageName)
+              q.setShortcutIds(listOf(shortcutId))
+              q.setQueryFlags(
+                android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
+                  android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                  android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+              )
+              val shortcuts = launcherApps.getShortcuts(q, user)
+              if (shortcuts != null && shortcuts.isNotEmpty()) {
+                icon =
+                  launcherApps.getShortcutIconDrawable(
+                    shortcuts[0],
+                    context.resources.displayMetrics.densityDpi,
+                  )
+                if (icon != null) {
+                  iconCache.put("shortcut_${doc.id}", icon)
+                  if (saveToDisk) {
+                    saveIconToDisk("shortcut_${doc.id}", icon, force = true)
+                  }
+                }
               }
+            } catch (e: Exception) {
+              // Ignore
             }
-          } catch (e: Exception) {
-            // Ignore
           }
         }
 
         val pkg = doc.id.split("/").firstOrNull() ?: ""
+        val cachedAppIcon = iconCache.get("appicon_$pkg")
         val appIcon =
-          try {
-            context.packageManager.getApplicationIcon(pkg)
-          } catch (e: Exception) {
-            null
+          if (cachedAppIcon != null) cachedAppIcon
+          else {
+            val diskAppIcon = if (allowDisk) loadIconFromDisk("appicon_$pkg") else null
+            if (diskAppIcon != null) {
+              iconCache.put("appicon_$pkg", diskAppIcon)
+              diskAppIcon
+            } else if (allowIpc) {
+              try {
+                val ai = context.packageManager.getApplicationIcon(pkg)
+                iconCache.put("appicon_$pkg", ai)
+                if (saveToDisk) {
+                  saveIconToDisk("appicon_$pkg", ai, force = true)
+                }
+                ai
+              } catch (e: Exception) {
+                null
+              }
+            } else null
           }
 
         SearchResult.Shortcut(
@@ -1711,31 +1797,40 @@ class SearchRepository(private val context: Context) {
       "app_shortcuts" -> {
         var icon: Drawable? = iconCache.get("app_shortcut_${doc.id}")
         if (icon == null) {
-          icon =
-            when {
-              doc.intentUri?.contains("android.settings") == true -> {
-                try {
-                  context.packageManager.getApplicationIcon("com.android.settings")
-                } catch (e: Exception) {
-                  null
-                }
-              }
-              doc.intentUri?.contains("STILL_IMAGE_CAMERA") == true -> {
-                context.getDrawable(android.R.drawable.ic_menu_camera)
-              }
-              doc.intentUri?.contains("VIDEO_CAMERA") == true -> {
-                context.getDrawable(android.R.drawable.ic_menu_camera)
-              }
-              else -> null
-            }
-          if (icon != null) {
+          val diskIcon = if (allowDisk) loadIconFromDisk("app_shortcut_${doc.id}") else null
+          if (diskIcon != null) {
+            icon = diskIcon
             iconCache.put("app_shortcut_${doc.id}", icon)
+          } else if (allowIpc) {
+            icon =
+              when {
+                doc.intentUri?.contains("android.settings") == true -> {
+                  try {
+                    context.packageManager.getApplicationIcon("com.android.settings")
+                  } catch (e: Exception) {
+                    null
+                  }
+                }
+                doc.intentUri?.contains("STILL_IMAGE_CAMERA") == true -> {
+                  context.getDrawable(android.R.drawable.ic_menu_camera)
+                }
+                doc.intentUri?.contains("VIDEO_CAMERA") == true -> {
+                  context.getDrawable(android.R.drawable.ic_menu_camera)
+                }
+                else -> null
+              }
+            if (icon != null) {
+              iconCache.put("app_shortcut_${doc.id}", icon)
+              if (saveToDisk) {
+                saveIconToDisk("app_shortcut_${doc.id}", icon, force = true)
+              }
+            }
           }
         }
 
         val isLauncherItem = doc.id.contains("launcher_")
         val launcherIcon =
-          if (isLauncherItem) {
+          if (isLauncherItem && allowIpc) {
             try {
               context.packageManager.getApplicationIcon(context.packageName)
             } catch (e: Exception) {
@@ -1788,16 +1883,25 @@ class SearchRepository(private val context: Context) {
       "static_shortcuts" -> {
         var icon: Drawable? = iconCache.get("static_shortcut_${doc.id}")
         if (icon == null) {
-          try {
-            val pkg = doc.id.substringBefore("/")
-            if (doc.iconResId > 0) {
-              val res = context.packageManager.getResourcesForApplication(pkg)
-              icon = res.getDrawable(doc.iconResId.toInt(), null)
-              if (icon != null) {
-                iconCache.put("static_shortcut_${doc.id}", icon)
+          val diskIcon = if (allowDisk) loadIconFromDisk("static_shortcut_${doc.id}") else null
+          if (diskIcon != null) {
+            icon = diskIcon
+            iconCache.put("static_shortcut_${doc.id}", icon)
+          } else if (allowIpc) {
+            try {
+              val pkg = doc.id.substringBefore("/")
+              if (doc.iconResId > 0) {
+                val res = context.packageManager.getResourcesForApplication(pkg)
+                icon = res.getDrawable(doc.iconResId.toInt(), null)
+                if (icon != null) {
+                  iconCache.put("static_shortcut_${doc.id}", icon)
+                  if (saveToDisk) {
+                    saveIconToDisk("static_shortcut_${doc.id}", icon, force = true)
+                  }
+                }
               }
-            }
-          } catch (e: Exception) {}
+            } catch (e: Exception) {}
+          }
         }
 
         val pkg = doc.id.split("/").firstOrNull() ?: ""
@@ -1880,18 +1984,20 @@ class SearchRepository(private val context: Context) {
         if (cached != null) {
           icon = cached
         } else {
-          // Try disk cache first (very fast)
-          val diskIcon = loadIconFromDisk(packageName)
+          // Try disk cache?
+          val diskIcon = if (allowDisk) loadIconFromDisk(packageName) else null
           if (diskIcon != null) {
             icon = diskIcon
             iconCache.put("app_$packageName", icon)
-          } else {
+          } else if (allowIpc) {
             // Fallback to PackageManager (slow IPC)
             try {
               icon = context.packageManager.getApplicationIcon(packageName)
               iconCache.put("app_$packageName", icon)
               // Save to disk for next time
-              saveIconToDisk(packageName, icon)
+              if (saveToDisk) {
+                saveIconToDisk(packageName, icon, force = true)
+              }
             } catch (e: Exception) {
               // Ignore
             }
@@ -2093,8 +2199,8 @@ class SearchRepository(private val context: Context) {
 
   private fun sanitizeId(id: String) = id.replace("/", "_").replace(":", "_")
 
-  private fun saveIconToDisk(id: String, drawable: Drawable?) {
-    if (drawable == null) return
+  private fun saveIconToDisk(id: String, drawable: Drawable?, force: Boolean = true) {
+    if (drawable == null || !force) return
     val targetFile = File(getIconDir(), "${sanitizeId(id)}.png")
     val tmpFile = File(getIconDir(), "${sanitizeId(id)}.tmp")
 

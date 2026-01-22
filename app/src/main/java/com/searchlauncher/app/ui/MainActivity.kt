@@ -1,7 +1,9 @@
 package com.searchlauncher.app.ui
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -48,8 +50,7 @@ class MainActivity : ComponentActivity() {
   var pendingImportUri: Uri? = null
 
   private val exportBackupLauncher =
-    registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) {
-      uri ->
+    registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
       if (uri != null) {
         lifecycleScope.launch { performExport(uri) }
       }
@@ -187,10 +188,10 @@ class MainActivity : ComponentActivity() {
       android.util.Log.e("MainActivity", "SecurityException adding widget", e)
       if (appWidgetId != -1) {
         Toast.makeText(
-            this,
-            "Restricted Settings detected. Attempting manual bind...",
-            Toast.LENGTH_SHORT,
-          )
+          this,
+          "Restricted Settings detected. Attempting manual bind...",
+          Toast.LENGTH_SHORT,
+        )
           .show()
 
         // Fallback: Try to launch the system bind dialog
@@ -206,10 +207,10 @@ class MainActivity : ComponentActivity() {
         } catch (innerE: Exception) {
           android.util.Log.e("MainActivity", "Fallback failed", innerE)
           Toast.makeText(
-              this,
-              "Permission denied. Enable 'Restricted Settings' in App Info, then FORCE STOP the app.",
-              Toast.LENGTH_LONG,
-            )
+            this,
+            "Permission denied. Enable 'Restricted Settings' in App Info, then FORCE STOP the app.",
+            Toast.LENGTH_LONG,
+          )
             .show()
         }
       } else {
@@ -245,6 +246,20 @@ class MainActivity : ComponentActivity() {
   private var pendingSettingsSection by mutableStateOf<String?>(null)
   private var focusTrigger by mutableStateOf(0L)
 
+  private val screenOnReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      android.util.Log.d("MainActivity", "SCREEN_ON received")
+      if (currentScreenState == Screen.Search) {
+        // Delay slightly to let system settle after unlock
+        lifecycleScope.launch {
+          kotlinx.coroutines.delay(100)
+          focusTrigger = System.currentTimeMillis()
+          android.util.Log.d("MainActivity", "SCREEN_ON: triggered keyboard")
+        }
+      }
+    }
+  }
+
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
@@ -266,16 +281,19 @@ class MainActivity : ComponentActivity() {
           currentScreenState = Screen.Settings
           pendingSettingsSection = "shortcuts"
         }
+
         "history",
         "wallpaper" -> {
           currentScreenState = Screen.Settings
           pendingSettingsSection = settingPage
         }
+
         "add_wallpaper" -> {
           pickWallpapersLauncher.launch(
             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
           )
         }
+
         "remove_current_wallpaper" -> {
           lifecycleScope.launch {
             val lastUri =
@@ -357,9 +375,8 @@ class MainActivity : ComponentActivity() {
     appWidgetManager = android.appwidget.AppWidgetManager.getInstance(applicationContext)
     appWidgetHost = android.appwidget.AppWidgetHost(applicationContext, APPWIDGET_HOST_ID)
     enableEdgeToEdge()
-    // Ensure keyboard opens automatically
-    @Suppress("DEPRECATION")
-    window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+    // Keep keyboard always visible
+    window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
 
     setContent {
       val themeColor =
@@ -394,6 +411,41 @@ class MainActivity : ComponentActivity() {
   override fun onStart() {
     super.onStart()
     appWidgetHost.startListening()
+
+    // Register for screen on events
+    val filter = IntentFilter(Intent.ACTION_SCREEN_ON)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      registerReceiver(screenOnReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+      @Suppress("UnspecifiedRegisterReceiverFlag")
+      registerReceiver(screenOnReceiver, filter)
+    }
+    android.util.Log.d("MainActivity", "Registered SCREEN_ON receiver")
+  }
+
+  override fun onResume() {
+    super.onResume()
+    android.util.Log.d("MainActivity", "onResume called, currentScreen=$currentScreenState")
+    if (currentScreenState == Screen.Search) {
+      // Trigger immediately
+      focusTrigger = System.currentTimeMillis()
+      android.util.Log.d("MainActivity", "onResume: triggered keyboard (immediate)")
+      // And again after a delay for screen unlock scenarios
+      lifecycleScope.launch {
+        kotlinx.coroutines.delay(200)
+        focusTrigger = System.currentTimeMillis()
+        android.util.Log.d("MainActivity", "onResume: triggered keyboard (delayed)")
+      }
+    }
+  }
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    android.util.Log.d("MainActivity", "onWindowFocusChanged: hasFocus=$hasFocus, currentScreen=$currentScreenState")
+    if (hasFocus && currentScreenState == Screen.Search) {
+      focusTrigger = System.currentTimeMillis()
+      android.util.Log.d("MainActivity", "onWindowFocusChanged: triggered keyboard")
+    }
   }
 
   override fun onStop() {
@@ -402,6 +454,14 @@ class MainActivity : ComponentActivity() {
       appWidgetHost.stopListening()
     } catch (e: Exception) {
       // Ignore
+    }
+
+    // Unregister screen on receiver
+    try {
+      unregisterReceiver(screenOnReceiver)
+      android.util.Log.d("MainActivity", "Unregistered SCREEN_ON receiver")
+    } catch (e: Exception) {
+      // Receiver might not be registered
     }
   }
 
@@ -420,8 +480,8 @@ class MainActivity : ComponentActivity() {
 
     // Hoist wallpaper state
     val lastImageUriString by
-      remember { context.dataStore.data.map { it[PreferencesKeys.BACKGROUND_LAST_IMAGE_URI] } }
-        .collectAsState(initial = null)
+    remember { context.dataStore.data.map { it[PreferencesKeys.BACKGROUND_LAST_IMAGE_URI] } }
+      .collectAsState(initial = null)
 
     val app = context.applicationContext as SearchLauncherApp
     val managedWallpapers by app.wallpaperRepository.wallpapers.collectAsState()
@@ -443,8 +503,8 @@ class MainActivity : ComponentActivity() {
         .collectAsState(initial = false)
 
     val isFirstRun by
-      remember { context.dataStore.data.map { it[PreferencesKeys.IS_FIRST_RUN] ?: true } }
-        .collectAsState(initial = false)
+    remember { context.dataStore.data.map { it[PreferencesKeys.IS_FIRST_RUN] ?: true } }
+      .collectAsState(initial = false)
 
     LaunchedEffect(isFirstRun) {
       if (isFirstRun) {
@@ -583,6 +643,7 @@ class MainActivity : ComponentActivity() {
                 isActive = currentScreenState == Screen.Search,
               )
             }
+
             Screen.Settings -> {
               SettingsScreen(
                 onStartService = { startOverlayService() },
@@ -593,6 +654,7 @@ class MainActivity : ComponentActivity() {
                 onExportBackup = { initiateExportBackup() },
               )
             }
+
             else -> {
               /* No-op */
             }
@@ -604,10 +666,10 @@ class MainActivity : ComponentActivity() {
           visible = currentScreenState == Screen.AppList,
           enter =
             androidx.compose.animation.slideInVertically { height -> height } +
-              androidx.compose.animation.fadeIn(),
+                    androidx.compose.animation.fadeIn(),
           exit =
             androidx.compose.animation.slideOutVertically { height -> height } +
-              androidx.compose.animation.fadeOut(),
+                    androidx.compose.animation.fadeOut(),
           modifier = Modifier.fillMaxSize(),
         ) {
           AppListScreen(
@@ -756,17 +818,17 @@ private suspend fun MainActivity.performExport(uri: android.net.Uri) {
         withContext(Dispatchers.Main) {
           if (result.isSuccess) {
             android.widget.Toast.makeText(
-                this@performExport,
-                "Backup exported successfully (${result.getOrNull()} items, $sizeString)",
-                android.widget.Toast.LENGTH_LONG,
-              )
+              this@performExport,
+              "Backup exported successfully (${result.getOrNull()} items, $sizeString)",
+              android.widget.Toast.LENGTH_LONG,
+            )
               .show()
           } else {
             android.widget.Toast.makeText(
-                this@performExport,
-                "Export failed: ${result.exceptionOrNull()?.message}",
-                android.widget.Toast.LENGTH_LONG,
-              )
+              this@performExport,
+              "Export failed: ${result.exceptionOrNull()?.message}",
+              android.widget.Toast.LENGTH_LONG,
+            )
               .show()
           }
         }
@@ -774,10 +836,10 @@ private suspend fun MainActivity.performExport(uri: android.net.Uri) {
     } catch (e: Exception) {
       withContext(Dispatchers.Main) {
         android.widget.Toast.makeText(
-            this@performExport,
-            "Export failed: ${e.message}",
-            android.widget.Toast.LENGTH_LONG,
-          )
+          this@performExport,
+          "Export failed: ${e.message}",
+          android.widget.Toast.LENGTH_LONG,
+        )
           .show()
       }
     }
@@ -808,17 +870,17 @@ private suspend fun MainActivity.performImport(uri: android.net.Uri) {
         withContext(Dispatchers.Main) {
           if (result.isSuccess) {
             android.widget.Toast.makeText(
-                this@performImport,
-                "Import successful!",
-                android.widget.Toast.LENGTH_LONG,
-              )
+              this@performImport,
+              "Import successful!",
+              android.widget.Toast.LENGTH_LONG,
+            )
               .show()
           } else {
             android.widget.Toast.makeText(
-                this@performImport,
-                "Import failed: ${result.exceptionOrNull()?.message}",
-                android.widget.Toast.LENGTH_LONG,
-              )
+              this@performImport,
+              "Import failed: ${result.exceptionOrNull()?.message}",
+              android.widget.Toast.LENGTH_LONG,
+            )
               .show()
           }
         }
@@ -826,10 +888,10 @@ private suspend fun MainActivity.performImport(uri: android.net.Uri) {
     } catch (e: Exception) {
       withContext(Dispatchers.Main) {
         android.widget.Toast.makeText(
-            this@performImport,
-            "Import failed: ${e.message}",
-            android.widget.Toast.LENGTH_LONG,
-          )
+          this@performImport,
+          "Import failed: ${e.message}",
+          android.widget.Toast.LENGTH_LONG,
+        )
           .show()
       }
     }
