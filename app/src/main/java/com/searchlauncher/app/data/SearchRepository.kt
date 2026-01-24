@@ -140,11 +140,20 @@ class SearchRepository(private val context: Context) {
         try {
           val launcherApps =
             context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
-                    as android.content.pm.LauncherApps
+              as android.content.pm.LauncherApps
           launcherApps.registerCallback(
             launcherCallback,
             android.os.Handler(android.os.Looper.getMainLooper()),
           )
+
+          // Pre-cache SearchLauncher's own icon for internal actions
+          scope.launch {
+            try {
+              cacheAppIcon(context.packageName, "launcher_app_icon")
+            } catch (e: Exception) {
+              e.printStackTrace()
+            }
+          }
         } catch (e: Exception) {
           e.printStackTrace()
         }
@@ -444,8 +453,8 @@ class SearchRepository(private val context: Context) {
             val query = android.content.pm.LauncherApps.ShortcutQuery()
             query.setQueryFlags(
               android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
-                      android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
-                      android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+                android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
             )
 
             val shortcutList = launcherApps.getShortcuts(query, profile) ?: emptyList()
@@ -473,10 +482,11 @@ class SearchRepository(private val context: Context) {
                 // Pre-load and cache shortcut icon
                 val shortcutId = "${shortcut.`package`}/${shortcut.id}"
                 try {
-                  val icon = launcherApps.getShortcutIconDrawable(
-                    shortcut,
-                    context.resources.displayMetrics.densityDpi,
-                  )
+                  val icon =
+                    launcherApps.getShortcutIconDrawable(
+                      shortcut,
+                      context.resources.displayMetrics.densityDpi,
+                    )
                   if (icon != null) {
                     iconCache.put("shortcut_$shortcutId", icon)
                     saveIconToDisk("shortcut_$shortcutId", icon, force = true)
@@ -1064,6 +1074,7 @@ class SearchRepository(private val context: Context) {
         android.util.Log.d("SearchRepository", "onPackageAdded: $packageName")
         scope.launch {
           indexApps()
+          cacheAppIcon(packageName)
           _packageUpdated.emit(null) // null means generic update
         }
       }
@@ -1071,6 +1082,7 @@ class SearchRepository(private val context: Context) {
       override fun onPackageChanged(packageName: String, user: android.os.UserHandle) {
         scope.launch {
           indexApps()
+          cacheAppIcon(packageName)
           _packageUpdated.emit(null)
         }
       }
@@ -1383,9 +1395,8 @@ class SearchRepository(private val context: Context) {
 
       results.sortByDescending { it.rankingScore }
 
-      // Cache single-letter queries (but only when icons are loaded)
-      // Don't cache results without icons as they'll be incomplete
-      if (query.matches(SINGLE_LETTER_PATTERN) && allowIpc) {
+      // Cache single-letter queries (icons are now pre-cached, so safe to cache)
+      if (query.matches(SINGLE_LETTER_PATTERN)) {
         val timeSinceLastUsage = System.currentTimeMillis() - lastUsageReportTime
         if (timeSinceLastUsage > CACHE_COOLDOWN_MS) {
           searchCache[query.lowercase()] = results
@@ -1425,8 +1436,8 @@ class SearchRepository(private val context: Context) {
     // Ignore reserved triggers that are now handled by smart actions
     if (
       trigger.equals("call", ignoreCase = true) ||
-      trigger.equals("sms", ignoreCase = true) ||
-      trigger.equals("mailto", ignoreCase = true)
+        trigger.equals("sms", ignoreCase = true) ||
+        trigger.equals("mailto", ignoreCase = true)
     ) {
       return emptyList()
     }
@@ -1443,7 +1454,7 @@ class SearchRepository(private val context: Context) {
         } else {
           installedProviders.filter {
             it.loadLabel(context.packageManager).contains(searchTerm, ignoreCase = true) ||
-                    it.provider.packageName.contains(searchTerm, ignoreCase = true)
+              it.provider.packageName.contains(searchTerm, ignoreCase = true)
           }
         }
 
@@ -1611,7 +1622,7 @@ class SearchRepository(private val context: Context) {
 
           val isSettings =
             doc.id == "com.android.settings" ||
-                    doc.intentUri?.contains("android.settings.SETTINGS") == true
+              doc.intentUri?.contains("android.settings.SETTINGS") == true
           val boost =
             when {
               isSettings -> 15
@@ -1687,7 +1698,7 @@ class SearchRepository(private val context: Context) {
                 doc,
                 boost,
                 query,
-                saveToDisk = allowIpc,
+                saveToDisk = false, // Icons already pre-cached during indexing
                 allowIpc = allowIpc,
                 allowDisk = allowDisk,
               )
@@ -1771,9 +1782,10 @@ class SearchRepository(private val context: Context) {
     kotlinx.coroutines.currentCoroutineContext().ensureActive()
     return when (doc.namespace) {
       "shortcuts" -> {
+        // Icons pre-cached during indexing, just load from cache
         var icon: Drawable? = iconCache.get("shortcut_${doc.id}")
-        if (icon == null) {
-          val diskIcon = if (allowDisk) loadIconFromDisk("shortcut_${doc.id}") else null
+        if (icon == null && allowDisk) {
+          val diskIcon = loadIconFromDisk("shortcut_${doc.id}")
           if (diskIcon != null) {
             icon = diskIcon
             iconCache.put("shortcut_${doc.id}", icon)
@@ -1781,7 +1793,7 @@ class SearchRepository(private val context: Context) {
             try {
               val launcherApps =
                 context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
-                        as android.content.pm.LauncherApps
+                  as android.content.pm.LauncherApps
               val user = android.os.Process.myUserHandle()
               val q = android.content.pm.LauncherApps.ShortcutQuery()
               val packageName = doc.id.split("/").firstOrNull() ?: ""
@@ -1790,8 +1802,8 @@ class SearchRepository(private val context: Context) {
               q.setShortcutIds(listOf(shortcutId))
               q.setQueryFlags(
                 android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
-                        android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
-                        android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+                  android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                  android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
               )
               val shortcuts = launcherApps.getShortcuts(q, user)
               if (shortcuts != null && shortcuts.isNotEmpty()) {
@@ -1813,16 +1825,14 @@ class SearchRepository(private val context: Context) {
           }
         }
 
+        // App icons pre-cached during indexing
         val pkg = doc.id.split("/").firstOrNull() ?: ""
-        val cachedAppIcon = iconCache.get("appicon_$pkg")
         val appIcon =
-          if (cachedAppIcon != null) cachedAppIcon
-          else {
-            val diskAppIcon = if (allowDisk) loadIconFromDisk("appicon_$pkg") else null
-            if (diskAppIcon != null) {
-              iconCache.put("appicon_$pkg", diskAppIcon)
-              diskAppIcon
-            } else if (allowIpc) {
+          iconCache.get("appicon_$pkg")
+            ?: (if (allowDisk)
+              loadIconFromDisk("appicon_$pkg")?.also { iconCache.put("appicon_$pkg", it) }
+            else null)
+            ?: (if (allowIpc) {
               try {
                 val ai = context.packageManager.getApplicationIcon(pkg)
                 iconCache.put("appicon_$pkg", ai)
@@ -1833,8 +1843,7 @@ class SearchRepository(private val context: Context) {
               } catch (e: Exception) {
                 null
               }
-            } else null
-          }
+            } else null)
 
         SearchResult.Shortcut(
           id = doc.id,
@@ -1850,9 +1859,10 @@ class SearchRepository(private val context: Context) {
       }
 
       "app_shortcuts" -> {
+        // Check cache first (settings icons, camera icons, etc.)
         var icon: Drawable? = iconCache.get("app_shortcut_${doc.id}")
-        if (icon == null) {
-          val diskIcon = if (allowDisk) loadIconFromDisk("app_shortcut_${doc.id}") else null
+        if (icon == null && allowDisk) {
+          val diskIcon = loadIconFromDisk("app_shortcut_${doc.id}")
           if (diskIcon != null) {
             icon = diskIcon
             iconCache.put("app_shortcut_${doc.id}", icon)
@@ -1889,27 +1899,26 @@ class SearchRepository(private val context: Context) {
         val isLauncherItem = doc.id.contains("launcher_")
         val launcherIcon =
           if (isLauncherItem) {
+            // Launcher icon should be pre-cached
             val cacheKey = "launcher_app_icon"
-            var cachedIcon = iconCache.get(cacheKey)
-            if (cachedIcon == null) {
-              // Try disk cache first
-              val diskIcon = if (allowDisk) loadIconFromDisk(cacheKey) else null
-              if (diskIcon != null) {
-                cachedIcon = diskIcon
-                iconCache.put(cacheKey, cachedIcon)
-              } else if (allowIpc) {
-                try {
-                  cachedIcon = context.packageManager.getApplicationIcon(context.packageName)
-                  iconCache.put(cacheKey, cachedIcon)
-                  if (saveToDisk) {
-                    saveIconToDisk(cacheKey, cachedIcon, force = true)
+            iconCache.get(cacheKey)
+              ?: (if (allowDisk) loadIconFromDisk(cacheKey)?.also { iconCache.put(cacheKey, it) }
+              else null)
+              ?: run {
+                // Robust fallback: if IPC is allowed, try to load it now
+                if (allowIpc) {
+                  try {
+                    context.packageManager.getApplicationIcon(context.packageName).also {
+                      iconCache.put(cacheKey, it)
+                      if (saveToDisk) {
+                        saveIconToDisk(cacheKey, it, force = true)
+                      }
+                    }
+                  } catch (e: Exception) {
+                    null
                   }
-                } catch (e: Exception) {
-                  null
-                }
+                } else null
               }
-            }
-            cachedIcon
           } else null
 
         SearchResult.Content(
@@ -1966,9 +1975,10 @@ class SearchRepository(private val context: Context) {
       }
 
       "static_shortcuts" -> {
+        // Static shortcut icons pre-cached during indexing
         var icon: Drawable? = iconCache.get("static_shortcut_${doc.id}")
-        if (icon == null) {
-          val diskIcon = if (allowDisk) loadIconFromDisk("static_shortcut_${doc.id}") else null
+        if (icon == null && allowDisk) {
+          val diskIcon = loadIconFromDisk("static_shortcut_${doc.id}")
           if (diskIcon != null) {
             icon = diskIcon
             iconCache.put("static_shortcut_${doc.id}", icon)
@@ -1985,8 +1995,7 @@ class SearchRepository(private val context: Context) {
                   }
                 }
               }
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) {}
           }
         }
 
@@ -2067,30 +2076,30 @@ class SearchRepository(private val context: Context) {
 
       else -> { // apps
         val packageName = doc.id
-        var icon: Drawable? = null
-        val cached = iconCache.get("app_$packageName")
-        if (cached != null) {
-          icon = cached
-        } else {
-          // Try disk cache?
-          val diskIcon = if (allowDisk) loadIconFromDisk(packageName) else null
-          if (diskIcon != null) {
-            icon = diskIcon
-            iconCache.put("app_$packageName", icon)
-          } else if (allowIpc) {
-            // Fallback to PackageManager (slow IPC)
-            try {
-              icon = context.packageManager.getApplicationIcon(packageName)
-              iconCache.put("app_$packageName", icon)
-              // Save to disk for next time
-              if (saveToDisk) {
-                saveIconToDisk(packageName, icon, force = true)
+        // App icons pre-cached during indexing/refresh
+        val icon =
+          iconCache.get("appicon_$packageName")
+            ?: (if (allowDisk)
+              loadIconFromDisk("appicon_$packageName")?.also {
+                iconCache.put("appicon_$packageName", it)
               }
-            } catch (e: Exception) {
-              // Ignore
-            }
-          }
-        }
+            else null)
+            ?: (if (allowIpc) {
+              try {
+                context.packageManager.getApplicationIcon(packageName).also {
+                  iconCache.put("appicon_$packageName", it)
+                  if (saveToDisk) {
+                    saveIconToDisk("appicon_$packageName", it, force = true)
+                  }
+                }
+              } catch (e: Exception) {
+                android.util.Log.w(
+                  "SearchRepository",
+                  "Failed to load app icon on demand for $packageName",
+                )
+                null
+              }
+            } else null)
 
         SearchResult.App(
           id = doc.id,
@@ -2160,6 +2169,19 @@ class SearchRepository(private val context: Context) {
       }
     }
   }
+
+  private suspend fun cacheAppIcon(packageName: String, customKey: String? = null) =
+    withContext(Dispatchers.IO) {
+      try {
+        val key = customKey ?: "appicon_$packageName"
+        val icon = context.packageManager.getApplicationIcon(packageName)
+        iconCache.put(key, icon)
+        saveIconToDisk(key, icon, force = true)
+        android.util.Log.d("SearchRepository", "Cached icon for $packageName as $key")
+      } catch (e: Exception) {
+        android.util.Log.e("SearchRepository", "Failed to cache icon for $packageName", e)
+      }
+    }
 
   private fun loadResultsFromCache(isFavorites: Boolean): List<SearchResult> {
     val file = if (isFavorites) getFavoritesCacheFile() else getHistoryCacheFile()
@@ -2352,7 +2374,8 @@ class SearchRepository(private val context: Context) {
         indexStaticShortcuts()
 
         // Rebuild ALL app icons by querying LauncherApps
-        val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as android.content.pm.LauncherApps
+        val launcherApps =
+          context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as android.content.pm.LauncherApps
         val profiles = launcherApps.profiles
         var iconCount = 0
 

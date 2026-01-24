@@ -248,13 +248,10 @@ class MainActivity : ComponentActivity() {
 
   private val screenOnReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-      android.util.Log.d("MainActivity", "SCREEN_ON received")
       if (currentScreenState == Screen.Search) {
-        // Delay slightly to let system settle after unlock
         lifecycleScope.launch {
           kotlinx.coroutines.delay(100)
           focusTrigger = System.currentTimeMillis()
-          android.util.Log.d("MainActivity", "SCREEN_ON: triggered keyboard")
         }
       }
     }
@@ -424,31 +421,24 @@ class MainActivity : ComponentActivity() {
       @Suppress("UnspecifiedRegisterReceiverFlag")
       registerReceiver(screenOnReceiver, filter)
     }
-    android.util.Log.d("MainActivity", "Registered SCREEN_ON receiver")
   }
 
   override fun onResume() {
     super.onResume()
-    android.util.Log.d("MainActivity", "onResume called, currentScreen=$currentScreenState")
     if (currentScreenState == Screen.Search) {
-      // Trigger immediately
       focusTrigger = System.currentTimeMillis()
-      android.util.Log.d("MainActivity", "onResume: triggered keyboard (immediate)")
-      // And again after a delay for screen unlock scenarios
+      // Trigger again after delay for screen unlock scenarios
       lifecycleScope.launch {
         kotlinx.coroutines.delay(200)
         focusTrigger = System.currentTimeMillis()
-        android.util.Log.d("MainActivity", "onResume: triggered keyboard (delayed)")
       }
     }
   }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
-    android.util.Log.d("MainActivity", "onWindowFocusChanged: hasFocus=$hasFocus, currentScreen=$currentScreenState")
     if (hasFocus && currentScreenState == Screen.Search) {
       focusTrigger = System.currentTimeMillis()
-      android.util.Log.d("MainActivity", "onWindowFocusChanged: triggered keyboard")
     }
   }
 
@@ -463,7 +453,6 @@ class MainActivity : ComponentActivity() {
     // Unregister screen on receiver
     try {
       unregisterReceiver(screenOnReceiver)
-      android.util.Log.d("MainActivity", "Unregistered SCREEN_ON receiver")
     } catch (e: Exception) {
       // Receiver might not be registered
     }

@@ -102,19 +102,19 @@ fun TutorialOverlay(
         }
         OnboardingStep.LongPressBackground -> {
           HoldGestureIndicator(
-            text = "Hold to change background oradd Widgets",
+            text = "Hold to change background or add Widgets",
             modifier = Modifier.align(Alignment.Center),
           )
         }
         OnboardingStep.SearchYoutube -> {
           TextHintIndicator(
-            text = "Try 'y ...' to search YouTube",
+            text = "Try typing 'y spacebar test' to search YouTube",
             modifier = Modifier.align(Alignment.Center),
           )
         }
         OnboardingStep.SearchGoogle -> {
           TextHintIndicator(
-            text = "Try 'g ...' to search Google\n(more in settings)",
+            text = "Try typing 'g spacebar test' to search Google\n(more in settings)",
             modifier = Modifier.align(Alignment.Center),
           )
         }

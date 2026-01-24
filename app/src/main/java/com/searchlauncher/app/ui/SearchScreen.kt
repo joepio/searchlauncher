@@ -222,11 +222,9 @@ fun SearchScreen(
 
   // Continuously monitor and force keyboard to stay visible using IMM
   DisposableEffect(isActive) {
-    android.util.Log.d("SearchScreen", "DisposableEffect starting, isActive=$isActive")
     val job = scope.launch {
       while (isActive) {
         if (!isImeVisible) {
-          android.util.Log.d("SearchScreen", "Keyboard not visible, forcing show with IMM")
           focusRequester.requestFocus()
           kotlinx.coroutines.delay(50)
           // Use SHOW_FORCED to aggressively show keyboard
@@ -238,15 +236,11 @@ fun SearchScreen(
       }
     }
 
-    onDispose {
-      android.util.Log.d("SearchScreen", "DisposableEffect disposing")
-      job.cancel()
-    }
+    onDispose { job.cancel() }
   }
 
   // Initial keyboard show on trigger
   LaunchedEffect(isActive, focusTrigger) {
-    android.util.Log.d("SearchScreen", "Triggered keyboard show: isActive=$isActive, focusTrigger=$focusTrigger")
     if (isActive) {
       focusRequester.requestFocus()
       kotlinx.coroutines.delay(100)
@@ -261,15 +255,12 @@ fun SearchScreen(
       searchResults = emptyList()
       isFallbackMode = false
     } else {
-      // Small debounce to avoid thrashing AppSearch on fast typing
-      // kotlinx.coroutines.delay(250)
-      val results = searchRepository.searchApps(query, allowIpc = false, allowDisk = true)
-      android.util.Log.d("SearchScreen", "Query: '$query', Results: ${results.size}")
+      val results = searchRepository.searchApps(query)
 
       // Always append search shortcuts to the end of the results
       // Use a higher limit to show all options as requested
       val shortcuts =
-        searchRepository.getSearchShortcuts(limit = 50, allowIpc = false, allowDisk = true)
+        searchRepository.getSearchShortcuts(limit = 50)
 
       val resultIds = results.map { it.id }.toSet()
       val uniqueShortcuts = shortcuts.filter { !resultIds.contains(it.id) }
