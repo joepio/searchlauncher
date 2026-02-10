@@ -77,6 +77,11 @@ class SearchLauncherApp : Application() {
     return getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).contains(KEY_CONSENT_GRANTED)
   }
 
+  fun isConsentGranted(): Boolean {
+    return getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      .getBoolean(KEY_CONSENT_GRANTED, false)
+  }
+
   fun hasAskedDefaultLauncher(): Boolean {
     return getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
       .getBoolean(KEY_ASKED_DEFAULT_LAUNCHER, false)

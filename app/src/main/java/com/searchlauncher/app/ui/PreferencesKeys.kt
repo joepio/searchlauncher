@@ -9,7 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 
 val android.content.Context.dataStore: DataStore<Preferences> by
-  preferencesDataStore(name = "settings")
+preferencesDataStore(name = "settings")
 
 object PreferencesKeys {
   val THEME_COLOR = intPreferencesKey("theme_color")
@@ -24,6 +24,7 @@ object PreferencesKeys {
   val HISTORY_LIMIT = intPreferencesKey("history_limit")
   val MIN_ICON_SIZE = intPreferencesKey("min_icon_size")
   val AUTO_THEME_FROM_WALLPAPER = booleanPreferencesKey("auto_theme_from_wallpaper")
+  val SEARCH_SHORTCUTS_ENABLED = booleanPreferencesKey("search_shortcuts_enabled")
 
   fun getDefaultIconSize(context: android.content.Context): Int {
     val config = context.resources.configuration

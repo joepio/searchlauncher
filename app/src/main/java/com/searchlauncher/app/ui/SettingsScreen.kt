@@ -115,6 +115,7 @@ fun SettingsScreen(
           "shortcuts" -> 2
           "snippets" -> 3
           "history" -> 5
+          "privacy" -> 9
           else -> -1
         }
       if (index >= 0) {
@@ -514,6 +515,7 @@ fun SettingsScreen(
       }
     }
 
+    item { PrivacyCard() }
     item { BackupRestoreCard(onExportBackup) }
     item { AboutCard() }
   }
@@ -1059,6 +1061,77 @@ private fun WallpaperManagementCard() {
             )
           }
         }
+      }
+    }
+  }
+}
+
+@Composable
+private fun PrivacyCard() {
+  val context = LocalContext.current
+  val app = context.applicationContext as SearchLauncherApp
+  val scope = rememberCoroutineScope()
+
+  val searchShortcutsEnabled =
+    remember {
+      context.dataStore.data.map { it[PreferencesKeys.SEARCH_SHORTCUTS_ENABLED] ?: true }
+    }
+      .collectAsState(initial = true)
+
+  var crashReportingEnabled by remember { mutableStateOf(app.isConsentGranted()) }
+
+  Card(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Text(text = "Privacy", style = MaterialTheme.typography.titleMedium)
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text(text = "Search suggestions", style = MaterialTheme.typography.bodyMedium)
+          Text(
+            text =
+              "Show autocomplete suggestions from third-party services (Google, YouTube, etc.) as you type",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Switch(
+          checked = searchShortcutsEnabled.value,
+          onCheckedChange = { enabled ->
+            scope.launch {
+              context.dataStore.edit { preferences ->
+                preferences[PreferencesKeys.SEARCH_SHORTCUTS_ENABLED] = enabled
+              }
+            }
+          },
+        )
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text(text = "Crash reporting", style = MaterialTheme.typography.bodyMedium)
+          Text(
+            text = "Send anonymous error logs to GlitchTip to help us fix bugs",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Switch(
+          checked = crashReportingEnabled,
+          onCheckedChange = { enabled ->
+            app.setConsent(enabled)
+            crashReportingEnabled = enabled
+          },
+        )
       }
     }
   }

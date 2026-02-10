@@ -33,6 +33,12 @@ fun ConsentDialog(onConsentGiven: (Boolean) -> Unit, onViewPrivacyPolicy: () -> 
           "By enabling error reporting, you help us identify and fix bugs. No personal data or search queries are collected."
         )
         Spacer(modifier = Modifier.height(8.dp))
+        Text(
+          "SearchLauncher also shows live search suggestions from third-party services (e.g., Google) as you type. You can disable suggestions anytime in Settings → Privacy.",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
         TextButton(onClick = onViewPrivacyPolicy, contentPadding = PaddingValues(0.dp)) {
           Text("View Privacy Policy", style = MaterialTheme.typography.labelMedium)
         }
