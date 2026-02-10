@@ -23,6 +23,7 @@ import com.searchlauncher.app.ui.PreferencesKeys
 import com.searchlauncher.app.ui.dataStore
 import com.searchlauncher.app.util.FuzzyMatch
 import com.searchlauncher.app.util.StaticShortcutScanner
+import com.searchlauncher.app.util.SystemUtils
 import io.sentry.Sentry
 import java.io.File
 import java.io.FileOutputStream
@@ -49,7 +50,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-class SearchRepository(private val context: Context) {
+class SearchRepository(private val context: Context) : BaseRepository() {
   private val documentCache = Collections.synchronizedList(mutableListOf<AppSearchDocument>())
   private var appSearchSession: AppSearchSession? = null
 
@@ -58,12 +59,6 @@ class SearchRepository(private val context: Context) {
       documentCache.removeAll { it.namespace == namespace }
       documentCache.addAll(documents)
     }
-  }
-
-  private fun logError(message: String, e: Throwable) {
-    if (e is kotlinx.coroutines.CancellationException) throw e
-    android.util.Log.e("SearchRepository", message, e)
-    Sentry.captureException(e)
   }
 
   private val executor = Executors.newSingleThreadExecutor()
@@ -131,10 +126,10 @@ class SearchRepository(private val context: Context) {
 
   private val usageStats = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
-  suspend fun initialize() =
-    withContext(Dispatchers.IO) {
-      val startTime = System.currentTimeMillis()
-      try {
+  suspend fun initialize(): Result<Unit> =
+    safeCall("SearchRepository", "Error initializing") {
+      withContext(Dispatchers.IO) {
+        val startTime = System.currentTimeMillis()
         loadUsageStats()
         _isIndexing.value = true
         // Load cached favorites and history immediately for instant UI
@@ -285,9 +280,6 @@ class SearchRepository(private val context: Context) {
             _isIndexing.value = false
           }
         }
-      } catch (e: Throwable) {
-        e.printStackTrace()
-        Sentry.captureException(e)
       }
     }
 
@@ -469,79 +461,96 @@ class SearchRepository(private val context: Context) {
 
         for (profile in profiles) {
           try {
-            // 2. Query for ALL shortcuts in the profile
-            val query = android.content.pm.LauncherApps.ShortcutQuery()
-            query.setQueryFlags(
-              android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
-                android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
-                android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
-            )
+            // 2. Query for shortcuts per package to avoid TransactionTooLargeException
+            val activityList = launcherApps.getActivityList(null, profile)
+            val packages = activityList.map { it.applicationInfo.packageName }.distinct()
 
-            val shortcutList = launcherApps.getShortcuts(query, profile) ?: emptyList()
-
-            for (shortcut in shortcutList) {
+            for (packageName in packages) {
               try {
-                val intent =
-                  try {
-                    "shortcut://${shortcut.`package`}/${shortcut.id}"
-                  } catch (e: Exception) {
-                    continue
-                  }
+                val query = android.content.pm.LauncherApps.ShortcutQuery()
+                query.setQueryFlags(
+                  android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
+                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+                )
+                query.setPackage(packageName)
 
-                val name = shortcut.shortLabel?.toString() ?: shortcut.longLabel?.toString() ?: ""
-                val appName =
-                  appNameCache.getOrPut(shortcut.`package`) {
+                val shortcutList = launcherApps.getShortcuts(query, profile) ?: emptyList()
+
+                for (shortcut in shortcutList) {
+                  try {
+                    val intent =
+                      try {
+                        "shortcut://${shortcut.`package`}/${shortcut.id}"
+                      } catch (e: Exception) {
+                        continue
+                      }
+
+                    val name =
+                      shortcut.shortLabel?.toString() ?: shortcut.longLabel?.toString() ?: ""
+                    val appName =
+                      appNameCache.getOrPut(shortcut.`package`) {
+                        try {
+                          val appInfo =
+                            context.packageManager.getApplicationInfo(shortcut.`package`, 0)
+                          context.packageManager.getApplicationLabel(appInfo).toString()
+                        } catch (e: Exception) {
+                          shortcut.`package`
+                        }
+                      }
+
+                    // Pre-load and cache shortcut icon
+                    val shortcutId = "${shortcut.`package`}/${shortcut.id}"
                     try {
-                      val appInfo = context.packageManager.getApplicationInfo(shortcut.`package`, 0)
-                      context.packageManager.getApplicationLabel(appInfo).toString()
+                      val icon =
+                        launcherApps.getShortcutIconDrawable(
+                          shortcut,
+                          context.resources.displayMetrics.densityDpi,
+                        )
+                      if (icon != null) {
+                        iconCache.put("shortcut_$shortcutId", icon)
+                        saveIconToDisk("shortcut_$shortcutId", icon, force = true)
+                      }
                     } catch (e: Exception) {
-                      shortcut.`package`
+                      // Ignore icon loading failures
+                      Sentry.captureException(e)
                     }
-                  }
 
-                // Pre-load and cache shortcut icon
-                val shortcutId = "${shortcut.`package`}/${shortcut.id}"
-                try {
-                  val icon =
-                    launcherApps.getShortcutIconDrawable(
-                      shortcut,
-                      context.resources.displayMetrics.densityDpi,
+                    // Pre-load and cache app icon
+                    val pkg = shortcut.`package`
+                    if (!iconCache.get("appicon_$pkg").let { it != null }) {
+                      try {
+                        val appIcon = context.packageManager.getApplicationIcon(pkg)
+                        iconCache.put("appicon_$pkg", appIcon)
+                        saveIconToDisk("appicon_$pkg", appIcon, force = true)
+                      } catch (e: Exception) {
+                        // Ignore app icon loading failures
+                        Sentry.captureException(e)
+                      }
+                    }
+
+                    shortcuts.add(
+                      AppSearchDocument(
+                        namespace = "shortcuts",
+                        id = shortcutId,
+                        name = name,
+                        score = 1,
+                        intentUri = intent,
+                        description = "Shortcut - $appName",
+                      )
                     )
-                  if (icon != null) {
-                    iconCache.put("shortcut_$shortcutId", icon)
-                    saveIconToDisk("shortcut_$shortcutId", icon, force = true)
-                  }
-                } catch (e: Exception) {
-                  // Ignore icon loading failures
-                  Sentry.captureException(e)
-                }
-
-                // Pre-load and cache app icon
-                val pkg = shortcut.`package`
-                if (!iconCache.get("appicon_$pkg").let { it != null }) {
-                  try {
-                    val appIcon = context.packageManager.getApplicationIcon(pkg)
-                    iconCache.put("appicon_$pkg", appIcon)
-                    saveIconToDisk("appicon_$pkg", appIcon, force = true)
                   } catch (e: Exception) {
-                    // Ignore app icon loading failures
+                    // Ignore individual shortcut failures
                     Sentry.captureException(e)
                   }
                 }
-
-                shortcuts.add(
-                  AppSearchDocument(
-                    namespace = "shortcuts",
-                    id = shortcutId,
-                    name = name,
-                    score = 1,
-                    intentUri = intent,
-                    description = "Shortcut - $appName",
-                  )
-                )
               } catch (e: Exception) {
-                // Ignore individual shortcut failures
-                Sentry.captureException(e)
+                // Ignore failures for specific packages to keep indexing others
+                android.util.Log.w(
+                  "SearchRepository",
+                  "Failed to query shortcuts for package $packageName",
+                  e,
+                )
               }
             }
           } catch (e: Exception) {
@@ -1411,9 +1420,9 @@ class SearchRepository(private val context: Context) {
     limit: Int = -1,
     allowIpc: Boolean = true,
     allowDisk: Boolean = true,
-  ): List<SearchResult> =
-    withContext(Dispatchers.IO) {
-      try {
+  ): Result<List<SearchResult>> =
+    safeCall("SearchRepository", "Error searching apps") {
+      withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         val session = appSearchSession
         if (session == null) return@withContext emptyList()
@@ -1479,14 +1488,14 @@ class SearchRepository(private val context: Context) {
             try {
               results.addAll(smartActionsAsync.await())
             } catch (e: Exception) {
-              logError("Error awaiting smart actions", e)
+              SystemUtils.logError("SearchRepository", "Error awaiting smart actions", e)
             }
           }
 
           try {
             results.addAll(indexSearchAsync.await())
           } catch (e: Exception) {
-            logError("Error awaiting index search", e)
+            SystemUtils.logError("SearchRepository", "Error awaiting index search", e)
           }
 
           // Add suggestions
@@ -1515,7 +1524,7 @@ class SearchRepository(private val context: Context) {
               }
             }
           } catch (e: Exception) {
-            logError("Error processing suggestions", e)
+            SystemUtils.logError("SearchRepository", "Error processing suggestions", e)
           }
         }
 
@@ -1535,9 +1544,6 @@ class SearchRepository(private val context: Context) {
           "searchApps for '$query' took ${duration}ms, results: ${results.size}",
         )
 
-        results
-      } catch (e: Exception) {
-        if (e is kotlinx.coroutines.CancellationException) throw e
         results
       }
     }
@@ -1613,7 +1619,7 @@ class SearchRepository(private val context: Context) {
           )
         } to shortcut
       } catch (e: Exception) {
-        logError("Error looking up widgets", e)
+        SystemUtils.logError("SearchRepository", "Error looking up widgets", e)
         emptyList<SearchResult>() to shortcut
       }
     }

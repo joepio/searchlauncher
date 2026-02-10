@@ -29,4 +29,10 @@ object SystemUtils {
       e.printStackTrace()
     }
   }
+
+  fun logError(tag: String, message: String, e: Throwable) {
+    if (e is kotlinx.coroutines.CancellationException) throw e
+    android.util.Log.e(tag, message, e)
+    io.sentry.Sentry.captureException(e)
+  }
 }

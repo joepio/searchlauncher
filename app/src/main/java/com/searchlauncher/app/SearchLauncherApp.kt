@@ -47,15 +47,7 @@ class SearchLauncherApp : Application() {
     widgetRepository = com.searchlauncher.app.data.WidgetRepository(this)
     wallpaperRepository = WallpaperRepository(this)
     historyRepository = HistoryRepository(this)
-    CoroutineScope(Dispatchers.IO).launch {
-      try {
-        searchRepository.initialize()
-      } catch (e: Exception) {
-        if (e is kotlinx.coroutines.CancellationException) throw e
-        android.util.Log.e("SearchLauncherApp", "Initialization failed", e)
-        io.sentry.Sentry.captureException(e)
-      }
-    }
+    CoroutineScope(Dispatchers.IO).launch { searchRepository.initialize() }
     createNotificationChannel()
   }
 

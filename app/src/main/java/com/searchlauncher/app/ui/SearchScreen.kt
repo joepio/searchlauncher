@@ -256,7 +256,8 @@ fun SearchScreen(
       searchResults = emptyList()
       isFallbackMode = false
     } else {
-      val results = searchRepository.searchApps(query, allowIpc = false)
+      val resultsResult = searchRepository.searchApps(query, allowIpc = false)
+      val results = resultsResult.getOrElse { emptyList() }
 
       // Always append search shortcuts to the end of the results
       // Use a higher limit to show all options as requested
@@ -517,7 +518,7 @@ fun SearchScreen(
         TutorialOverlay(
           currentStep = currentOnboardingStep,
           bottomPadding = bottomPadding,
-          onDismissStep = { /* optional manual dismiss */},
+          onDismissStep = { /* optional manual dismiss */ },
         )
       }
 
