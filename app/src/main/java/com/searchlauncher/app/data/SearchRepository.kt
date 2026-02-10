@@ -336,38 +336,51 @@ class SearchRepository(private val context: Context) : BaseRepository() {
 
       for (profile in profiles) {
         try {
-          val activityList = launcherApps.getActivityList(null, profile)
-          for (info in activityList) {
+          // Querying all activities at once can exceed the 1MB Binder limit
+          // (TransactionTooLargeException).
+          // We fetch the list of packages first, which is a much smaller transaction,
+          // then query activities per-package.
+          val allPackages = context.packageManager.getInstalledPackages(0)
+
+          for (pkg in allPackages) {
             try {
-              val appName = info.label.toString()
-              val packageName = info.componentName.packageName
+              val activityList = launcherApps.getActivityList(pkg.packageName, profile)
+              if (activityList.isEmpty()) continue
 
-              val appInfo = info.applicationInfo
-              val category =
-                when (appInfo.category) {
-                  ApplicationInfo.CATEGORY_GAME -> "Game"
-                  ApplicationInfo.CATEGORY_AUDIO -> "Audio"
-                  ApplicationInfo.CATEGORY_VIDEO -> "Video"
-                  ApplicationInfo.CATEGORY_IMAGE -> "Image"
-                  ApplicationInfo.CATEGORY_SOCIAL -> "Social"
-                  ApplicationInfo.CATEGORY_NEWS -> "News"
-                  ApplicationInfo.CATEGORY_MAPS -> "Maps"
-                  ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Productivity"
-                  else -> "Application"
+              for (info in activityList) {
+                try {
+                  val appName = info.label.toString()
+                  val packageName = info.componentName.packageName
+
+                  val appInfo = info.applicationInfo
+                  val category =
+                    when (appInfo.category) {
+                      ApplicationInfo.CATEGORY_GAME -> "Game"
+                      ApplicationInfo.CATEGORY_AUDIO -> "Audio"
+                      ApplicationInfo.CATEGORY_VIDEO -> "Video"
+                      ApplicationInfo.CATEGORY_IMAGE -> "Image"
+                      ApplicationInfo.CATEGORY_SOCIAL -> "Social"
+                      ApplicationInfo.CATEGORY_NEWS -> "News"
+                      ApplicationInfo.CATEGORY_MAPS -> "Maps"
+                      ApplicationInfo.CATEGORY_PRODUCTIVITY -> "Productivity"
+                      else -> "Application"
+                    }
+
+                  apps.add(
+                    AppSearchDocument(
+                      namespace = "apps",
+                      id = packageName,
+                      name = appName,
+                      score = 2,
+                      description = category,
+                    )
+                  )
+                } catch (e: Exception) {
+                  // Ignore individual app failures
                 }
-
-              apps.add(
-                AppSearchDocument(
-                  namespace = "apps",
-                  id = packageName,
-                  name = appName,
-                  score = 2,
-                  description = category,
-                )
-              )
+              }
             } catch (e: Exception) {
-              // Ignore individual app failures
-              Sentry.captureException(e)
+              // Ignore package-level failures (e.g. uninstalled while iterating)
             }
           }
         } catch (e: Exception) {
@@ -461,12 +474,18 @@ class SearchRepository(private val context: Context) : BaseRepository() {
 
         for (profile in profiles) {
           try {
-            // 2. Query for shortcuts per package to avoid TransactionTooLargeException
-            val activityList = launcherApps.getActivityList(null, profile)
-            val packages = activityList.map { it.applicationInfo.packageName }.distinct()
+            // Fetch list of packages first to avoid Binder transaction limits when querying
+            // activities/shortcuts.
+            val allPackages = context.packageManager.getInstalledPackages(0)
 
-            for (packageName in packages) {
+            for (pkg in allPackages) {
+              val packageName = pkg.packageName
               try {
+                // Ensure the package has at least one launcher activity in this profile before
+                // querying shortcuts
+                val activityList = launcherApps.getActivityList(packageName, profile)
+                if (activityList.isEmpty()) continue
+
                 val query = android.content.pm.LauncherApps.ShortcutQuery()
                 query.setQueryFlags(
                   android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
@@ -475,7 +494,12 @@ class SearchRepository(private val context: Context) : BaseRepository() {
                 )
                 query.setPackage(packageName)
 
-                val shortcutList = launcherApps.getShortcuts(query, profile) ?: emptyList()
+                val shortcutList =
+                  try {
+                    launcherApps.getShortcuts(query, profile) ?: emptyList()
+                  } catch (e: Exception) {
+                    emptyList()
+                  }
 
                 for (shortcut in shortcutList) {
                   try {
