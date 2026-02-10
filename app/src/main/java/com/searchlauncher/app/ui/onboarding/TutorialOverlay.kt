@@ -33,7 +33,6 @@ import kotlinx.coroutines.delay
 fun TutorialOverlay(
   currentStep: OnboardingStep?,
   bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
-  onDismissStep: () -> Unit,
 ) {
   // Manage visibility and delayed step update
   val visibleState = remember { MutableTransitionState(false) }
@@ -42,18 +41,15 @@ fun TutorialOverlay(
   LaunchedEffect(currentStep) {
     if (currentStep == null) {
       visibleState.targetState = false
-      // No delay needed for hiding
-      delay(500) // Wait for fade out to complete before clearing (optional but safe)
+      // Wait for exit animation
+      delay(500)
       renderedStep = null
     } else {
-      if (renderedStep != null) {
+      if (renderedStep != null && renderedStep != currentStep) {
         // Transitioning from one step to another
         visibleState.targetState = false
-        delay(500) // Wait for fade out
+        delay(550) // Slightly more than exit transition (500ms)
       }
-      // Pause before showing next step
-      delay(2000)
-
       renderedStep = currentStep
       visibleState.targetState = true
     }
@@ -76,6 +72,7 @@ fun TutorialOverlay(
             modifier = Modifier.align(Alignment.Center),
           )
         }
+
         OnboardingStep.SwipeNotifications -> {
           SwipeGestureIndicator(
             text = "Swipe down (left) for notifications",
@@ -85,6 +82,7 @@ fun TutorialOverlay(
             align = Alignment.Start,
           )
         }
+
         OnboardingStep.SwipeQuickSettings -> {
           SwipeGestureIndicator(
             text = "Swipe down (right) for settings",
@@ -93,6 +91,7 @@ fun TutorialOverlay(
             align = Alignment.End,
           )
         }
+
         OnboardingStep.SwipeAppDrawer -> {
           SwipeGestureIndicator(
             text = "Swipe up for App Drawer",
@@ -100,24 +99,28 @@ fun TutorialOverlay(
             modifier = Modifier.align(Alignment.Center),
           )
         }
+
         OnboardingStep.LongPressBackground -> {
           HoldGestureIndicator(
             text = "Hold to change background or add Widgets",
             modifier = Modifier.align(Alignment.Center),
           )
         }
+
         OnboardingStep.SearchYoutube -> {
           TextHintIndicator(
             text = "Try typing 'y spacebar test' to search YouTube",
             modifier = Modifier.align(Alignment.Center),
           )
         }
+
         OnboardingStep.SearchGoogle -> {
           TextHintIndicator(
             text = "Try typing 'g spacebar test' to search Google\n(more in settings)",
             modifier = Modifier.align(Alignment.Center),
           )
         }
+
         OnboardingStep.AddFavorite -> {
           // Requires context of search results, handled in SearchScreen item renderer or generic
           // overlay
@@ -127,12 +130,21 @@ fun TutorialOverlay(
             modifier = Modifier.align(Alignment.Center).padding(bottom = 100.dp),
           )
         }
+
         OnboardingStep.ReorderFavorites -> {
           TextHintIndicator(
             text = "Hold app icons to change order",
             modifier = Modifier.align(Alignment.Center).padding(bottom = 150.dp),
           )
         }
+
+        OnboardingStep.OpenSettings -> {
+          TextHintIndicator(
+            text = "Press the ⚙ to open Settings",
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 80.dp),
+          )
+        }
+
         else -> {}
       }
     }
@@ -162,51 +174,51 @@ fun SwipeGestureIndicator(
 
   // Animate offset: Hold 0, Move 0->1 (S-Curve), Hold 1
   val offsetVal by
-    infiniteTransition.animateFloat(
-      initialValue = 0f,
-      targetValue = 1f,
-      animationSpec =
-        infiniteRepeatable(
-          animation =
-            keyframes {
-              durationMillis = duration
-              0f at 0 using LinearEasing // Start
-              0f at
-                startDelay using
-                androidx.compose.animation.core.CubicBezierEasing(
-                  0.42f,
-                  0.0f,
-                  0.58f,
-                  1.0f,
-                ) // Start move
-              1f at (startDelay + swipeDuration) using LinearEasing // End move
-              1f at duration
-            },
-          repeatMode = RepeatMode.Restart,
-        ),
-      label = "offset",
-    )
+  infiniteTransition.animateFloat(
+    initialValue = 0f,
+    targetValue = 1f,
+    animationSpec =
+      infiniteRepeatable(
+        animation =
+          keyframes {
+            durationMillis = duration
+            0f at 0 using LinearEasing // Start
+            0f at
+                    startDelay using
+                    androidx.compose.animation.core.CubicBezierEasing(
+                      0.42f,
+                      0.0f,
+                      0.58f,
+                      1.0f,
+                    ) // Start move
+            1f at (startDelay + swipeDuration) using LinearEasing // End move
+            1f at duration
+          },
+        repeatMode = RepeatMode.Restart,
+      ),
+    label = "offset",
+  )
 
   // Animate fade: Fade In, Stay, Fade Out, Pause
   val fade by
-    infiniteTransition.animateFloat(
-      initialValue = 0f,
-      targetValue = 1f,
-      animationSpec =
-        infiniteRepeatable(
-          animation =
-            keyframes {
-              durationMillis = duration
-              0f at 0 using LinearEasing
-              1f at startDelay // Fully visible before move starts
-              1f at (startDelay + swipeDuration) // Stay visible during move
-              0f at (startDelay + swipeDuration + endDelay) // Fade out
-              0f at duration // Pause
-            },
-          repeatMode = RepeatMode.Restart,
-        ),
-      label = "fade",
-    )
+  infiniteTransition.animateFloat(
+    initialValue = 0f,
+    targetValue = 1f,
+    animationSpec =
+      infiniteRepeatable(
+        animation =
+          keyframes {
+            durationMillis = duration
+            0f at 0 using LinearEasing
+            1f at startDelay // Fully visible before move starts
+            1f at (startDelay + swipeDuration) // Stay visible during move
+            0f at (startDelay + swipeDuration + endDelay) // Fade out
+            0f at duration // Pause
+          },
+        repeatMode = RepeatMode.Restart,
+      ),
+    label = "fade",
+  )
 
   Column(modifier = modifier, horizontalAlignment = align) {
     Text(
@@ -270,16 +282,16 @@ fun SwipeGestureIndicator(
 fun HoldGestureIndicator(text: String, modifier: Modifier = Modifier) {
   val infiniteTransition = rememberInfiniteTransition(label = "hold")
   val scale by
-    infiniteTransition.animateFloat(
-      initialValue = 1f,
-      targetValue = 1.2f,
-      animationSpec =
-        infiniteRepeatable(
-          animation = tween(1000, easing = FastOutSlowInEasing),
-          repeatMode = RepeatMode.Reverse,
-        ),
-      label = "scale",
-    )
+  infiniteTransition.animateFloat(
+    initialValue = 1f,
+    targetValue = 1.2f,
+    animationSpec =
+      infiniteRepeatable(
+        animation = tween(1000, easing = FastOutSlowInEasing),
+        repeatMode = RepeatMode.Reverse,
+      ),
+    label = "scale",
+  )
 
   Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
     Box(

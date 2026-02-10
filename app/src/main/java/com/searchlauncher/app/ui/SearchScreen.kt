@@ -110,20 +110,20 @@ fun SearchScreen(
   val listState = androidx.compose.foundation.lazy.rememberLazyListState()
   val rawHistoryItems by searchRepository.recentItems.collectAsState()
   val historyLimit by
-    remember { context.dataStore.data.map { it[PreferencesKeys.HISTORY_LIMIT] ?: -1 } }
-      .collectAsState(initial = -1)
+  remember { context.dataStore.data.map { it[PreferencesKeys.HISTORY_LIMIT] ?: -1 } }
+    .collectAsState(initial = -1)
   val minIconSizeSetting by
-    remember {
-        context.dataStore.data.map {
-          it[PreferencesKeys.MIN_ICON_SIZE] ?: PreferencesKeys.getDefaultIconSize(context)
-        }
-      }
-      .collectAsState(
-        initial =
-          context
-            .getSharedPreferences("search_launcher_prefs", Context.MODE_PRIVATE)
-            .getInt("min_icon_size", PreferencesKeys.getDefaultIconSize(context))
-      )
+  remember {
+    context.dataStore.data.map {
+      it[PreferencesKeys.MIN_ICON_SIZE] ?: PreferencesKeys.getDefaultIconSize(context)
+    }
+  }
+    .collectAsState(
+      initial =
+        context
+          .getSharedPreferences("search_launcher_prefs", Context.MODE_PRIVATE)
+          .getInt("min_icon_size", PreferencesKeys.getDefaultIconSize(context))
+    )
 
   // Sync back to SharedPreferences for faster boot next time
   LaunchedEffect(minIconSizeSetting) {
@@ -144,69 +144,90 @@ fun SearchScreen(
     }
 
   val themeColor by
-    remember {
-        context.dataStore.data.map { it[PreferencesKeys.THEME_COLOR] ?: 0xFF5E6D4E.toInt() }
-      }
-      .collectAsState(initial = 0xFF5E6D4E.toInt())
+  remember {
+    context.dataStore.data.map { it[PreferencesKeys.THEME_COLOR] ?: 0xFF5E6D4E.toInt() }
+  }
+    .collectAsState(initial = 0xFF5E6D4E.toInt())
   val themeSaturation by
-    remember { context.dataStore.data.map { it[PreferencesKeys.THEME_SATURATION] ?: 50f } }
-      .collectAsState(initial = 50f)
+  remember { context.dataStore.data.map { it[PreferencesKeys.THEME_SATURATION] ?: 50f } }
+    .collectAsState(initial = 50f)
   val darkMode by
-    remember { context.dataStore.data.map { it[PreferencesKeys.DARK_MODE] ?: 0 } }
-      .collectAsState(initial = 0)
+  remember { context.dataStore.data.map { it[PreferencesKeys.DARK_MODE] ?: 0 } }
+    .collectAsState(initial = 0)
   val isOled by
-    remember { context.dataStore.data.map { it[PreferencesKeys.OLED_MODE] ?: false } }
-      .collectAsState(initial = false)
+  remember { context.dataStore.data.map { it[PreferencesKeys.OLED_MODE] ?: false } }
+    .collectAsState(initial = false)
   val showWidgetsSetting by
-    remember { context.dataStore.data.map { it[PreferencesKeys.SHOW_WIDGETS] ?: true } }
-      .collectAsState(initial = true)
+  remember { context.dataStore.data.map { it[PreferencesKeys.SHOW_WIDGETS] ?: true } }
+    .collectAsState(initial = true)
 
   // Onboarding Logic
   val onboardingManager = remember { OnboardingManager(context) }
-  val completedSteps by onboardingManager.completedSteps.collectAsState(initial = emptySet())
+  val completedSteps by onboardingManager.completedSteps.collectAsState(initial = null)
 
-  // Determine current step
-  val currentOnboardingStep =
-    remember(completedSteps, query) {
+  // Determine current step using derivedStateOf so that intermediate state changes
+  // (e.g. completedSteps updating async from DataStore) only trigger recomposition
+  // when the actual computed step changes — avoids brief flashes of wrong steps.
+  val currentOnboardingStep by
+  remember(query, folderImages, isActive) {
+    derivedStateOf {
+      if (!isActive) return@derivedStateOf null
+      val steps = completedSteps ?: return@derivedStateOf null
       if (query.isNotEmpty()) {
-        if (!completedSteps.contains(OnboardingStep.AddFavorite) && searchResults.isNotEmpty())
+        if (
+          !steps.contains(OnboardingStep.AddFavorite) &&
+          searchResults.isNotEmpty() &&
+          favorites.isEmpty()
+        )
           OnboardingStep.AddFavorite
         else null
       } else {
-        if (!completedSteps.contains(OnboardingStep.SwipeBackground) && folderImages.size > 1)
+        if (!steps.contains(OnboardingStep.SwipeBackground) && folderImages.size > 1)
           OnboardingStep.SwipeBackground
-        else if (!completedSteps.contains(OnboardingStep.SwipeNotifications))
+        else if (!steps.contains(OnboardingStep.SwipeNotifications))
           OnboardingStep.SwipeNotifications
-        else if (!completedSteps.contains(OnboardingStep.SwipeQuickSettings))
+        else if (!steps.contains(OnboardingStep.SwipeQuickSettings))
           OnboardingStep.SwipeQuickSettings
-        else if (!completedSteps.contains(OnboardingStep.SwipeAppDrawer))
-          OnboardingStep.SwipeAppDrawer
-        else if (!completedSteps.contains(OnboardingStep.LongPressBackground))
+        else if (!steps.contains(OnboardingStep.SwipeAppDrawer)) OnboardingStep.SwipeAppDrawer
+        else if (!steps.contains(OnboardingStep.LongPressBackground))
           OnboardingStep.LongPressBackground
-        else if (!completedSteps.contains(OnboardingStep.SearchYoutube))
-          OnboardingStep.SearchYoutube
-        else if (!completedSteps.contains(OnboardingStep.SearchGoogle)) OnboardingStep.SearchGoogle
-        else if (!completedSteps.contains(OnboardingStep.ReorderFavorites) && favorites.size >= 2)
+        else if (!steps.contains(OnboardingStep.SearchYoutube)) OnboardingStep.SearchYoutube
+        else if (!steps.contains(OnboardingStep.SearchGoogle)) OnboardingStep.SearchGoogle
+        else if (!steps.contains(OnboardingStep.ReorderFavorites) && favorites.size >= 2)
           OnboardingStep.ReorderFavorites
+        else if (!steps.contains(OnboardingStep.OpenSettings)) OnboardingStep.OpenSettings
         // AddFavorite is situational, shown when search results exist
         else null
       }
     }
+  }
 
   // Effect to mark steps complete based on state
   LaunchedEffect(query, completedSteps) {
+    val steps = completedSteps ?: return@LaunchedEffect
     if (
-      !completedSteps.contains(OnboardingStep.SearchYoutube) &&
-        query.trimStart().startsWith("y ", ignoreCase = true)
+      !steps.contains(OnboardingStep.SearchYoutube) &&
+      query.trimStart().startsWith("y ", ignoreCase = true)
     ) {
       onboardingManager.markStepComplete(OnboardingStep.SearchYoutube)
     }
 
     if (
-      !completedSteps.contains(OnboardingStep.SearchGoogle) &&
-        query.trimStart().startsWith("g ", ignoreCase = true)
+      !steps.contains(OnboardingStep.SearchGoogle) &&
+      query.trimStart().startsWith("g ", ignoreCase = true)
     ) {
       onboardingManager.markStepComplete(OnboardingStep.SearchGoogle)
+    }
+  }
+
+  // Auto-complete steps based on existing state
+  LaunchedEffect(favorites, completedSteps) {
+    val steps = completedSteps ?: return@LaunchedEffect
+    if (favorites.isNotEmpty() && !steps.contains(OnboardingStep.AddFavorite)) {
+      onboardingManager.markStepComplete(OnboardingStep.AddFavorite)
+    }
+    if (favorites.size >= 2 && !steps.contains(OnboardingStep.ReorderFavorites)) {
+      onboardingManager.markStepComplete(OnboardingStep.ReorderFavorites)
     }
   }
 
@@ -216,14 +237,13 @@ fun SearchScreen(
     }
   }
 
-  val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
   val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
   val view = LocalView.current
 
   // Use InputMethodManager for more reliable keyboard control
   val imm = remember {
     context.getSystemService(Context.INPUT_METHOD_SERVICE)
-      as android.view.inputmethod.InputMethodManager
+            as android.view.inputmethod.InputMethodManager
   }
 
   // Continuously monitor and force keyboard to stay visible using IMM
@@ -234,9 +254,9 @@ fun SearchScreen(
           if (!isImeVisible) {
             focusRequester.requestFocus()
             kotlinx.coroutines.delay(50)
-            // Use SHOW_FORCED to aggressively show keyboard
+            // Use SHOW_IMPLICIT for standard keyboard show
             view.post {
-              imm.showSoftInput(view, android.view.inputmethod.InputMethodManager.SHOW_FORCED)
+              imm.showSoftInput(view, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
             }
           }
           kotlinx.coroutines.delay(200) // Check every 200ms
@@ -251,7 +271,9 @@ fun SearchScreen(
     if (isActive) {
       focusRequester.requestFocus()
       kotlinx.coroutines.delay(100)
-      view.post { imm.showSoftInput(view, android.view.inputmethod.InputMethodManager.SHOW_FORCED) }
+      view.post {
+        imm.showSoftInput(view, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+      }
     }
   }
 
@@ -323,7 +345,7 @@ fun SearchScreen(
   // Check if contacts permission is granted
   val hasContactsPermission = remember {
     context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) ==
-      android.content.pm.PackageManager.PERMISSION_GRANTED
+            android.content.pm.PackageManager.PERMISSION_GRANTED
   }
 
   val hintManager =
@@ -519,11 +541,7 @@ fun SearchScreen(
           },
         )
 
-        TutorialOverlay(
-          currentStep = currentOnboardingStep,
-          bottomPadding = bottomPadding,
-          onDismissStep = { /* optional manual dismiss */ },
-        )
+        TutorialOverlay(currentStep = currentOnboardingStep, bottomPadding = bottomPadding)
 
         if (showConsentDialog) {
           ConsentDialog(
@@ -641,9 +659,8 @@ fun SearchScreen(
                 reverseLayout = true,
                 contentPadding = PaddingValues(vertical = 8.dp),
               ) {
-                itemsIndexed(searchResults, key = { _, item -> "${item.namespace}/${item.id}" }) {
-                  index,
-                  result ->
+                itemsIndexed(searchResults, key = { _, item -> "${item.namespace}/${item.id}" }) { index,
+                                                                                                   result ->
                   SearchResultItem(
                     result = result,
                     isFavorite = favoriteIds.contains(result.id),
@@ -752,8 +769,8 @@ fun SearchScreen(
                         // from query context)
                         if (
                           query.isNotEmpty() &&
-                            !result.trigger.equals(query.trim(), ignoreCase = true) &&
-                            !result.title.contains(query.trim(), ignoreCase = true)
+                          !result.trigger.equals(query.trim(), ignoreCase = true) &&
+                          !result.title.contains(query.trim(), ignoreCase = true)
                         ) {
                           // Perform Search
                           val shortcut =
@@ -782,10 +799,10 @@ fun SearchScreen(
                               onDismiss()
                             } catch (e: Exception) {
                               Toast.makeText(
-                                  context,
-                                  "Cannot open: ${result.title}",
-                                  Toast.LENGTH_SHORT,
-                                )
+                                context,
+                                "Cannot open: ${result.title}",
+                                Toast.LENGTH_SHORT,
+                              )
                                 .show()
                             }
                           }
@@ -796,72 +813,36 @@ fun SearchScreen(
                       } else {
                         if (
                           result is SearchResult.Content &&
-                            result.deepLink ==
-                              "intent:#Intent;action=com.searchlauncher.action.CREATE_SNIPPET;end"
+                          result.deepLink ==
+                          "intent:#Intent;action=com.searchlauncher.action.CREATE_SNIPPET;end"
                         ) {
                           snippetEditMode = false
                           showSnippetDialog = true
                         } else if (
                           result is SearchResult.Content &&
-                            result.deepLink ==
-                              "intent:#Intent;action=com.searchlauncher.action.ADD_WIDGET;end"
+                          result.deepLink ==
+                          "intent:#Intent;action=com.searchlauncher.action.ADD_WIDGET;end"
                         ) {
                           onAddWidget()
-                        } else if (
-                          (result is SearchResult.Content &&
-                            result.deepLink ==
-                              "intent:#Intent;action=com.searchlauncher.action.RESET_ONBOARDING;end") ||
-                            (result is SearchResult.Shortcut &&
-                              result.intentUri ==
-                                "intent:#Intent;action=com.searchlauncher.action.RESET_ONBOARDING;end")
-                        ) {
-                          scope.launch {
-                            onboardingManager.resetOnboarding()
-                            onDismiss()
-                          }
                         } else {
-                          val resetAppDataIntent =
-                            "intent:#Intent;action=com.searchlauncher.RESET_APP_DATA;end"
-                          val resetIndexIntent =
-                            "intent:#Intent;action=com.searchlauncher.RESET_INDEX;end"
-
-                          val deepLink =
-                            (result as? SearchResult.Content)?.deepLink
-                              ?: (result as? SearchResult.Shortcut)?.intentUri
-
-                          if (deepLink == resetAppDataIntent) {
-                            showResetConfirmation =
-                              "This will permanently delete ALL app data, including your search history, bookmarks, and snippets. This cannot be undone." to
-                                {
-                                  onDismiss()
-                                  scope.launch { searchRepository.resetAppData() }
-                                }
-                          } else if (deepLink == resetIndexIntent) {
-                            showResetConfirmation =
-                              "This will rebuild the search index and clear your usage statistics. Your bookmarks and snippets will be preserved." to
-                                {
-                                  onDismiss()
-                                  scope.launch { searchRepository.resetIndex() }
-                                }
+                          launchResult(
+                            context,
+                            result,
+                            searchRepository,
+                            scope,
+                            query,
+                            index == 0,
+                            onQueryChange,
+                            onboardingManager = onboardingManager,
+                          )
+                          if (
+                            result is SearchResult.Content &&
+                            result.deepLink ==
+                            "intent:#Intent;action=com.searchlauncher.action.APPEND_SPACE;end"
+                          ) {
+                            // Do nothing (keep search open)
                           } else {
-                            launchResult(
-                              context,
-                              result,
-                              searchRepository,
-                              scope,
-                              query,
-                              index == 0,
-                              onQueryChange,
-                            )
-                            if (
-                              result is SearchResult.Content &&
-                                result.deepLink ==
-                                  "intent:#Intent;action=com.searchlauncher.action.APPEND_SPACE;end"
-                            ) {
-                              // Do nothing (keep search open)
-                            } else {
-                              onDismiss()
-                            }
+                            onDismiss()
                           }
                         }
                       }
@@ -882,7 +863,14 @@ fun SearchScreen(
             historyLimit = historyLimit,
             minIconSizeSetting = minIconSizeSetting,
             onLaunch = { result ->
-              launchResult(context, result, searchRepository, scope, onQueryChange = onQueryChange)
+              launchResult(
+                context,
+                result,
+                searchRepository,
+                scope,
+                onQueryChange = onQueryChange,
+                onboardingManager = onboardingManager,
+              )
               onDismiss()
             },
             onToggleFavorite = { result -> app.favoritesRepository.toggleFavorite(result.id) },
@@ -959,8 +947,8 @@ fun SearchScreen(
                       }
                     val label =
                       (activeShortcut.shortLabel
-                          ?: defaultShortcut?.shortLabel
-                          ?: activeShortcut.description)
+                        ?: defaultShortcut?.shortLabel
+                        ?: activeShortcut.description)
                         .replace("Search ", "", ignoreCase = true)
                         .replace("Ask ", "", ignoreCase = true)
                         .trim()
@@ -1016,8 +1004,8 @@ fun SearchScreen(
                   Modifier.weight(1f).focusRequester(focusRequester).onKeyEvent { event ->
                     if (
                       event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DEL &&
-                        displayQuery.isEmpty() &&
-                        activeShortcut != null
+                      displayQuery.isEmpty() &&
+                      activeShortcut != null
                     ) {
                       onQueryChange("")
                       true
@@ -1069,10 +1057,10 @@ fun SearchScreen(
                                 onDismiss()
                               } catch (e: Exception) {
                                 Toast.makeText(
-                                    context,
-                                    "Cannot open: ${topResult.title}",
-                                    Toast.LENGTH_SHORT,
-                                  )
+                                  context,
+                                  "Cannot open: ${topResult.title}",
+                                  Toast.LENGTH_SHORT,
+                                )
                                   .show()
                               }
                             } else {
@@ -1093,6 +1081,7 @@ fun SearchScreen(
                             searchRepository,
                             scope,
                             onQueryChange = onQueryChange,
+                            onboardingManager = onboardingManager,
                           )
                           onDismiss()
                         }
@@ -1153,7 +1142,7 @@ fun SearchScreen(
                     } else {
                       if (
                         context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
-                          android.content.pm.PackageManager.PERMISSION_GRANTED
+                        android.content.pm.PackageManager.PERMISSION_GRANTED
                       ) {
                         try {
                           val intent =
@@ -1187,7 +1176,10 @@ fun SearchScreen(
                 }
 
                 IconButton(
-                  onClick = onOpenSettings,
+                  onClick = {
+                    scope.launch { onboardingManager.markStepComplete(OnboardingStep.OpenSettings) }
+                    onOpenSettings()
+                  },
                   modifier = Modifier.size(32.dp).padding(4.dp),
                 ) {
                   Icon(
@@ -1231,7 +1223,7 @@ fun SearchScreen(
       shortcut = editingShortcut,
       existingAliases =
         searchShortcuts.map { it.alias } +
-          com.searchlauncher.app.data.DefaultShortcuts.searchShortcuts.map { it.alias },
+                com.searchlauncher.app.data.DefaultShortcuts.searchShortcuts.map { it.alias },
       onDismiss = { showShortcutDialog = false },
       onSave = { newShortcut ->
         scope.launch {
@@ -1275,6 +1267,7 @@ private fun launchResult(
   query: String = "",
   wasFirstResult: Boolean = false,
   onQueryChange: ((String) -> Unit)? = null,
+  onboardingManager: OnboardingManager? = null,
 ) {
   when (result) {
     is SearchResult.App -> {
@@ -1284,6 +1277,7 @@ private fun launchResult(
         context.startActivity(it)
       }
     }
+
     is SearchResult.Content -> {
       if (result.deepLink?.startsWith("calculator://copy") == true) {
         val textToCopy = Uri.parse(result.deepLink).getQueryParameter("text") ?: result.title
@@ -1307,10 +1301,10 @@ private fun launchResult(
             (context as? MainActivity)?.handleWidgetIntent(intent)
               ?: run {
                 Toast.makeText(
-                    context,
-                    "Cannot bind widget: Activity not found",
-                    Toast.LENGTH_SHORT,
-                  )
+                  context,
+                  "Cannot bind widget: Activity not found",
+                  Toast.LENGTH_SHORT,
+                )
                   .show()
               }
           } else if (intent.action == "com.searchlauncher.action.APPEND_SPACE") {
@@ -1329,6 +1323,14 @@ private fun launchResult(
                 Toast.makeText(context, "App Data Reset", Toast.LENGTH_SHORT).show()
               }
             }
+          } else if (intent.action == "com.searchlauncher.action.RESET_ONBOARDING") {
+            onQueryChange?.invoke("")
+            scope.launch {
+              onboardingManager?.resetOnboarding()
+              withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Onboarding Reset", Toast.LENGTH_SHORT).show()
+              }
+            }
           } else if (CustomActionHandler.handleAction(context, intent)) {
             // Handled
           } else {
@@ -1341,6 +1343,7 @@ private fun launchResult(
         }
       }
     }
+
     is SearchResult.Shortcut -> {
       try {
         val uri = result.intentUri
@@ -1351,22 +1354,50 @@ private fun launchResult(
             val id = parts[1]
             val launcherApps =
               context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
-                as android.content.pm.LauncherApps
+                      as android.content.pm.LauncherApps
             launcherApps.startShortcut(pkg, id, null, null, android.os.Process.myUserHandle())
           }
         } else {
-          val intent = Intent.parseUri(uri, 0)
-          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-          context.startActivity(intent)
+          val intent = Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
+          if (intent.action == "com.searchlauncher.RESET_INDEX") {
+            scope.launch {
+              searchRepository.resetIndex()
+              withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Search Index Reset", Toast.LENGTH_SHORT).show()
+              }
+            }
+          } else if (intent.action == "com.searchlauncher.RESET_APP_DATA") {
+            scope.launch {
+              searchRepository.resetAppData()
+              withContext(Dispatchers.Main) {
+                Toast.makeText(context, "App Data Reset", Toast.LENGTH_SHORT).show()
+              }
+            }
+          } else if (intent.action == "com.searchlauncher.action.RESET_ONBOARDING") {
+            onQueryChange?.invoke("")
+            scope.launch {
+              onboardingManager?.resetOnboarding()
+              withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Onboarding Reset", Toast.LENGTH_SHORT).show()
+              }
+            }
+          } else if (CustomActionHandler.handleAction(context, intent)) {
+            // Handled
+          } else {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+          }
         }
       } catch (e: Exception) {
         e.printStackTrace()
         Toast.makeText(context, "Error launching shortcut", Toast.LENGTH_SHORT).show()
       }
     }
+
     is SearchResult.SearchIntent -> {
       // Handled in UI
     }
+
     is SearchResult.Contact -> {
       try {
         val intent = Intent(Intent.ACTION_VIEW)
@@ -1383,6 +1414,7 @@ private fun launchResult(
         Toast.makeText(context, "Error opening contact", Toast.LENGTH_SHORT).show()
       }
     }
+
     is SearchResult.Snippet -> {
       val clipboard =
         context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager

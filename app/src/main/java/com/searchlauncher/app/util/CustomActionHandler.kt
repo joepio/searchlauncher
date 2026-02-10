@@ -72,6 +72,10 @@ object CustomActionHandler {
         openInternalSetting(context, "remove_current_wallpaper")
         true
       }
+      "com.searchlauncher.action.RESET_ONBOARDING" -> {
+        // Will be intercepted and handled by SearchScreen/MainActivity
+        false
+      }
       else -> false
     }
   }

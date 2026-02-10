@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 val Context.onboardingDataStore: DataStore<Preferences> by
-  androidx.datastore.preferences.preferencesDataStore(name = "onboarding")
+androidx.datastore.preferences.preferencesDataStore(name = "onboarding")
 
 class OnboardingManager(private val context: Context) {
 
@@ -25,6 +25,7 @@ class OnboardingManager(private val context: Context) {
     val KEY_SEARCH_GOOGLE = booleanPreferencesKey("onboarding_search_google")
     val KEY_ADD_FAVORITE = booleanPreferencesKey("onboarding_add_favorite")
     val KEY_REORDER_FAVORITES = booleanPreferencesKey("onboarding_reorder_favorites")
+    val KEY_OPEN_SETTINGS = booleanPreferencesKey("onboarding_open_settings")
   }
 
   val completedSteps: Flow<Set<OnboardingStep>> =
@@ -39,6 +40,7 @@ class OnboardingManager(private val context: Context) {
       if (prefs[KEY_SEARCH_GOOGLE] == true) steps.add(OnboardingStep.SearchGoogle)
       if (prefs[KEY_ADD_FAVORITE] == true) steps.add(OnboardingStep.AddFavorite)
       if (prefs[KEY_REORDER_FAVORITES] == true) steps.add(OnboardingStep.ReorderFavorites)
+      if (prefs[KEY_OPEN_SETTINGS] == true) steps.add(OnboardingStep.OpenSettings)
       steps
     }
 
@@ -54,6 +56,7 @@ class OnboardingManager(private val context: Context) {
         OnboardingStep.SearchGoogle -> prefs[KEY_SEARCH_GOOGLE] = true
         OnboardingStep.AddFavorite -> prefs[KEY_ADD_FAVORITE] = true
         OnboardingStep.ReorderFavorites -> prefs[KEY_REORDER_FAVORITES] = true
+        OnboardingStep.OpenSettings -> prefs[KEY_OPEN_SETTINGS] = true
       }
     }
   }
@@ -73,4 +76,5 @@ enum class OnboardingStep {
   SearchGoogle,
   AddFavorite,
   ReorderFavorites,
+  OpenSettings,
 }
