@@ -49,6 +49,40 @@ class SearchLauncherApp : Application() {
     historyRepository = HistoryRepository(this)
     CoroutineScope(Dispatchers.IO).launch { searchRepository.initialize() }
     createNotificationChannel()
+    checkConsentAndInitSentry()
+  }
+
+  private fun checkConsentAndInitSentry() {
+    val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    if (prefs.contains(KEY_CONSENT_GRANTED)) {
+      val granted = prefs.getBoolean(KEY_CONSENT_GRANTED, false)
+      if (granted) {
+        initSentry()
+      }
+    }
+  }
+
+  fun setConsent(granted: Boolean) {
+    getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      .edit()
+      .putBoolean(KEY_CONSENT_GRANTED, granted)
+      .apply()
+
+    if (granted) {
+      initSentry()
+    }
+  }
+
+  fun hasAskedForConsent(): Boolean {
+    return getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).contains(KEY_CONSENT_GRANTED)
+  }
+
+  private fun initSentry() {
+    if (!io.sentry.Sentry.isEnabled()) {
+      io.sentry.android.core.SentryAndroid.init(this) { options ->
+        options.dsn = "https://dbf3428d2c6942e4816c063d289fa95d@app.glitchtip.com/20343"
+      }
+    }
   }
 
   private fun createNotificationChannel() {
@@ -73,5 +107,7 @@ class SearchLauncherApp : Application() {
   companion object {
     const val NOTIFICATION_CHANNEL_ID = "searchlauncher_service"
     const val NOTIFICATION_ID = 1001
+    private const val PREFS_NAME = "privacy_prefs"
+    private const val KEY_CONSENT_GRANTED = "consent_granted"
   }
 }

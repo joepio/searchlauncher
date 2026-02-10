@@ -52,7 +52,9 @@ import androidx.datastore.preferences.core.edit
 import com.searchlauncher.app.data.SearchRepository
 import com.searchlauncher.app.data.SearchResult
 import com.searchlauncher.app.service.GestureAccessibilityService
+import com.searchlauncher.app.ui.components.ConsentDialog
 import com.searchlauncher.app.ui.components.FavoritesRow
+import com.searchlauncher.app.ui.components.PrivacyPolicyDialog
 import com.searchlauncher.app.ui.components.SearchResultItem
 import com.searchlauncher.app.ui.components.ShortcutDialog
 import com.searchlauncher.app.ui.components.SnippetDialog
@@ -98,6 +100,8 @@ fun SearchScreen(
   var snippetEditMode by remember { mutableStateOf(false) }
   var snippetItemToEdit by remember { mutableStateOf<SearchResult.Snippet?>(null) }
   var showResetConfirmation by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
+  var showConsentDialog by remember { mutableStateOf(!app.hasAskedForConsent()) }
+  var showPrivacyPolicy by remember { mutableStateOf(false) }
   val searchShortcuts by app.searchShortcutRepository.items.collectAsState()
   var showShortcutDialog by remember { mutableStateOf(false) }
   var editingShortcut by remember {
@@ -520,6 +524,23 @@ fun SearchScreen(
           bottomPadding = bottomPadding,
           onDismissStep = { /* optional manual dismiss */ },
         )
+
+        if (showConsentDialog) {
+          ConsentDialog(
+            onConsentGiven = { granted ->
+              app.setConsent(granted)
+              showConsentDialog = false
+            },
+            onViewPrivacyPolicy = { showPrivacyPolicy = true },
+          )
+        }
+
+        if (showPrivacyPolicy) {
+          PrivacyPolicyDialog(
+            onDismiss = { showPrivacyPolicy = false },
+            policyText = getPrivacyPolicyText(context),
+          )
+        }
       }
 
       if (showBackgroundMenu) {
@@ -1417,5 +1438,13 @@ internal fun Drawable.toImageBitmap(): ImageBitmap? {
 }
 
 // FavoritesRow extracted to components/FavoritesRow.kt
+
+private fun getPrivacyPolicyText(context: Context): String {
+  return try {
+    context.assets.open("PRIVACY.md").bufferedReader().use { it.readText() }
+  } catch (e: Exception) {
+    "Privacy policy not found."
+  }
+}
 
 // SnippetDialog extracted to components/SnippetDialog.kt

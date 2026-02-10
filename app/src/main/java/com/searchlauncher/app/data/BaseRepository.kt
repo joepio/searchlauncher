@@ -1,5 +1,6 @@
 package com.searchlauncher.app.data
 
+import com.searchlauncher.app.util.SystemUtils
 import kotlinx.coroutines.CancellationException
 
 abstract class BaseRepository {
@@ -14,12 +15,12 @@ abstract class BaseRepository {
     } catch (e: CancellationException) {
       throw e
     } catch (e: Throwable) {
-      com.searchlauncher.app.util.SystemUtils.logError(tag, errorMessage, e)
+      SystemUtils.logError(tag, errorMessage, e)
       Result.failure(e)
     }
   }
 
   protected fun logException(tag: String, message: String, e: Throwable) {
-    com.searchlauncher.app.util.SystemUtils.logError(tag, message, e)
+    SystemUtils.logError(tag, message, e)
   }
 }
