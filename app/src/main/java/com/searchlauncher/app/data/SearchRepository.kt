@@ -147,7 +147,7 @@ class SearchRepository(private val context: Context) : BaseRepository() {
         try {
           val launcherApps =
             context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
-                    as android.content.pm.LauncherApps
+              as android.content.pm.LauncherApps
           launcherApps.registerCallback(
             launcherCallback,
             android.os.Handler(android.os.Looper.getMainLooper()),
@@ -489,8 +489,8 @@ class SearchRepository(private val context: Context) : BaseRepository() {
                 val query = android.content.pm.LauncherApps.ShortcutQuery()
                 query.setQueryFlags(
                   android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
-                          android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
-                          android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
                 )
                 query.setPackage(packageName)
 
@@ -1464,7 +1464,9 @@ class SearchRepository(private val context: Context) : BaseRepository() {
         // Check if search shortcuts are enabled
         val searchShortcutsEnabled =
           try {
-            context.dataStore.data.map { it[PreferencesKeys.SEARCH_SHORTCUTS_ENABLED] ?: true }.first()
+            context.dataStore.data
+              .map { it[PreferencesKeys.SEARCH_SHORTCUTS_ENABLED] ?: true }
+              .first()
           } catch (e: Exception) {
             true // Default to enabled if DataStore fails
           }
@@ -1505,7 +1507,11 @@ class SearchRepository(private val context: Context) : BaseRepository() {
 
           // 5. Suggestions (only when search shortcuts / suggestions are enabled)
           val suggestionsAsync =
-            if (searchShortcutsEnabled && matchedShortcut?.suggestionUrl != null && query.contains(" ")) {
+            if (
+              searchShortcutsEnabled &&
+                matchedShortcut?.suggestionUrl != null &&
+                query.contains(" ")
+            ) {
               val searchTerm = query.substringAfter(" ")
               if (searchTerm.isNotEmpty()) {
                 async { fetchSuggestions(matchedShortcut.suggestionUrl!!, searchTerm) }
@@ -1607,8 +1613,8 @@ class SearchRepository(private val context: Context) : BaseRepository() {
     // Ignore reserved triggers that are now handled by smart actions
     if (
       trigger.equals("call", ignoreCase = true) ||
-      trigger.equals("sms", ignoreCase = true) ||
-      trigger.equals("mailto", ignoreCase = true)
+        trigger.equals("sms", ignoreCase = true) ||
+        trigger.equals("mailto", ignoreCase = true)
     ) {
       return emptyList<SearchResult>() to null
     }
@@ -1629,7 +1635,7 @@ class SearchRepository(private val context: Context) : BaseRepository() {
           } else {
             installedProviders.filter {
               it.loadLabel(context.packageManager).contains(searchTerm, ignoreCase = true) ||
-                      it.provider.packageName.contains(searchTerm, ignoreCase = true)
+                it.provider.packageName.contains(searchTerm, ignoreCase = true)
             }
           }
 
@@ -1774,7 +1780,7 @@ class SearchRepository(private val context: Context) : BaseRepository() {
 
           val isSettings =
             doc.id == "com.android.settings" ||
-                    doc.intentUri?.contains("android.settings.SETTINGS") == true
+              doc.intentUri?.contains("android.settings.SETTINGS") == true
           val boost =
             when {
               isSettings -> 15
@@ -1948,7 +1954,7 @@ class SearchRepository(private val context: Context) : BaseRepository() {
             try {
               val launcherApps =
                 context.getSystemService(Context.LAUNCHER_APPS_SERVICE)
-                        as android.content.pm.LauncherApps
+                  as android.content.pm.LauncherApps
               val user = android.os.Process.myUserHandle()
               val q = android.content.pm.LauncherApps.ShortcutQuery()
               val packageName = doc.id.split("/").firstOrNull() ?: ""
@@ -1957,8 +1963,8 @@ class SearchRepository(private val context: Context) : BaseRepository() {
               q.setShortcutIds(listOf(shortcutId))
               q.setQueryFlags(
                 android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
-                        android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
-                        android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+                  android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                  android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
               )
               val shortcuts = launcherApps.getShortcuts(q, user)
               if (shortcuts != null && shortcuts.isNotEmpty()) {
@@ -2012,7 +2018,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
           rankingScore = rankingScore,
         )
       }
-
       "app_shortcuts" -> {
         // Check cache first (settings icons, camera icons, etc.)
         var icon: Drawable? = iconCache.get("app_shortcut_${doc.id}")
@@ -2031,15 +2036,12 @@ class SearchRepository(private val context: Context) : BaseRepository() {
                     null
                   }
                 }
-
                 doc.intentUri?.contains("STILL_IMAGE_CAMERA") == true -> {
                   context.getDrawable(android.R.drawable.ic_menu_camera)
                 }
-
                 doc.intentUri?.contains("VIDEO_CAMERA") == true -> {
                   context.getDrawable(android.R.drawable.ic_menu_camera)
                 }
-
                 else -> null
               }
             if (icon != null) {
@@ -2087,7 +2089,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
           rankingScore = rankingScore,
         )
       }
-
       "search_shortcuts" -> {
         val alias = doc.description ?: ""
         val cacheKey = "search_shortcut_${doc.id}"
@@ -2112,7 +2113,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
           rankingScore = rankingScore,
         )
       }
-
       "web_bookmarks" -> {
         val browserIcon =
           context.getDrawable(android.R.drawable.ic_menu_compass)
@@ -2128,7 +2128,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
           rankingScore = rankingScore,
         )
       }
-
       "static_shortcuts" -> {
         // Static shortcut icons pre-cached during indexing
         var icon: Drawable? = iconCache.get("static_shortcut_${doc.id}")
@@ -2150,8 +2149,7 @@ class SearchRepository(private val context: Context) : BaseRepository() {
                   }
                 }
               }
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) {}
           }
         }
 
@@ -2175,7 +2173,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
           rankingScore = rankingScore,
         )
       }
-
       "contacts" -> {
         val lookupKey = doc.id.substringBefore("/")
         val contactId = doc.id.substringAfter("/").toLongOrNull() ?: 0L
@@ -2229,7 +2226,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
           photoUri = photoUri,
         )
       }
-
       else -> { // apps
         val packageName = doc.id
         // App icons pre-cached during indexing/refresh
@@ -2298,19 +2294,16 @@ class SearchRepository(private val context: Context) : BaseRepository() {
               obj.put("intentUri", res.intentUri)
               obj.put("packageName", res.packageName)
             }
-
             is SearchResult.Content -> {
               obj.put("deepLink", res.deepLink)
               obj.put("packageName", res.packageName)
             }
-
             is SearchResult.SearchIntent -> obj.put("trigger", res.trigger)
             is SearchResult.Contact -> {
               obj.put("lookupKey", res.lookupKey)
               obj.put("contactId", res.contactId)
               obj.put("photoUri", res.photoUri ?: "")
             }
-
             is SearchResult.Snippet -> {
               obj.put("alias", res.alias)
               obj.put("content", res.content)
@@ -2363,7 +2356,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
                 icon,
                 packageName = obj.optString("packageName", id),
               )
-
             "Shortcut" ->
               SearchResult.Shortcut(
                 id,
@@ -2374,7 +2366,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
                 packageName = obj.optString("packageName", ""),
                 intentUri = obj.getString("intentUri"),
               )
-
             "Content" ->
               SearchResult.Content(
                 id,
@@ -2385,7 +2376,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
                 packageName = obj.optString("packageName", ""),
                 deepLink = obj.getString("deepLink"),
               )
-
             "SearchIntent" ->
               SearchResult.SearchIntent(
                 id,
@@ -2395,7 +2385,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
                 icon,
                 trigger = obj.getString("trigger"),
               )
-
             "Contact" ->
               SearchResult.Contact(
                 id,
@@ -2407,7 +2396,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
                 contactId = obj.getLong("contactId"),
                 photoUri = obj.optString("photoUri", "").takeIf { it.isNotEmpty() },
               )
-
             "Snippet" ->
               SearchResult.Snippet(
                 id,
@@ -2418,7 +2406,6 @@ class SearchRepository(private val context: Context) : BaseRepository() {
                 alias = obj.getString("alias"),
                 content = obj.getString("content"),
               )
-
             else -> null
           }
         if (res != null) results.add(res)

@@ -9,7 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 
 val android.content.Context.dataStore: DataStore<Preferences> by
-preferencesDataStore(name = "settings")
+  preferencesDataStore(name = "settings")
 
 object PreferencesKeys {
   val THEME_COLOR = intPreferencesKey("theme_color")

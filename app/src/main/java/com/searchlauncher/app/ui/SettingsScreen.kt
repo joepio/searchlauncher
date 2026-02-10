@@ -168,8 +168,8 @@ fun SettingsScreen(
           val scope = rememberCoroutineScope()
           val storeWebHistory =
             remember {
-              context.dataStore.data.map { it[PreferencesKeys.STORE_WEB_HISTORY] ?: true }
-            }
+                context.dataStore.data.map { it[PreferencesKeys.STORE_WEB_HISTORY] ?: true }
+              }
               .collectAsState(initial = true)
 
           Row(
@@ -219,7 +219,7 @@ fun SettingsScreen(
 
                 if (isSelected) {
                   Button(
-                    onClick = { /* Already selected */ },
+                    onClick = { /* Already selected */},
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                   ) {
@@ -251,11 +251,11 @@ fun SettingsScreen(
             AnimatedVisibility(visible = historyLimit.value != 0) {
               val minIconSize =
                 remember {
-                  context.dataStore.data.map {
-                    it[PreferencesKeys.MIN_ICON_SIZE]
-                      ?: PreferencesKeys.getDefaultIconSize(context)
+                    context.dataStore.data.map {
+                      it[PreferencesKeys.MIN_ICON_SIZE]
+                        ?: PreferencesKeys.getDefaultIconSize(context)
+                    }
                   }
-                }
                   .collectAsState(initial = PreferencesKeys.getDefaultIconSize(context))
 
               val appIcon = remember {
@@ -361,8 +361,8 @@ fun SettingsScreen(
           val scope = rememberCoroutineScope()
           val swipeGestureEnabled =
             remember {
-              context.dataStore.data.map { it[PreferencesKeys.SWIPE_GESTURE_ENABLED] ?: false }
-            }
+                context.dataStore.data.map { it[PreferencesKeys.SWIPE_GESTURE_ENABLED] ?: false }
+              }
               .collectAsState(initial = false)
 
           Row(
@@ -455,10 +455,10 @@ fun SettingsScreen(
               "Required for the side swipe gesture to show the search overlay on top of other apps.",
             granted =
               rememberPermissionState {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                  Settings.canDrawOverlays(context)
-                } else true
-              }
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    Settings.canDrawOverlays(context)
+                  } else true
+                }
                 .value,
             onGrant = {
               if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -498,9 +498,9 @@ fun SettingsScreen(
             description = "Required to search your contacts.",
             granted =
               rememberPermissionState {
-                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) ==
-                        PackageManager.PERMISSION_GRANTED
-              }
+                  ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) ==
+                    PackageManager.PERMISSION_GRANTED
+                }
                 .value,
             onGrant = {
               val intent =
@@ -866,7 +866,7 @@ private fun CustomShortcutsCard() {
       shortcut = editingShortcut,
       existingAliases =
         shortcuts.map { it.alias } +
-                com.searchlauncher.app.data.DefaultShortcuts.searchShortcuts.map { it.alias },
+          com.searchlauncher.app.data.DefaultShortcuts.searchShortcuts.map { it.alias },
       onDismiss = { showDialog = false },
       onSave = { newShortcut ->
         scope.launch {
@@ -1074,9 +1074,7 @@ private fun PrivacyCard() {
   var showPrivacyPolicy by remember { mutableStateOf(false) }
 
   val searchShortcutsEnabled =
-    remember {
-      context.dataStore.data.map { it[PreferencesKeys.SEARCH_SHORTCUTS_ENABLED] ?: true }
-    }
+    remember { context.dataStore.data.map { it[PreferencesKeys.SEARCH_SHORTCUTS_ENABLED] ?: true } }
       .collectAsState(initial = true)
 
   var crashReportingEnabled by remember { mutableStateOf(app.isConsentGranted()) }
@@ -1135,10 +1133,7 @@ private fun PrivacyCard() {
         )
       }
 
-      TextButton(
-        onClick = { showPrivacyPolicy = true },
-        modifier = Modifier.fillMaxWidth(),
-      ) {
+      TextButton(onClick = { showPrivacyPolicy = true }, modifier = Modifier.fillMaxWidth()) {
         Text("View Privacy Policy")
       }
     }
@@ -1251,7 +1246,8 @@ private fun AboutCard() {
       )
 
       Text(
-        text = "${com.searchlauncher.app.BuildConfig.VERSION_NAME} · ${com.searchlauncher.app.BuildConfig.GIT_HASH} · ${com.searchlauncher.app.BuildConfig.BUILD_DATE}",
+        text =
+          "${com.searchlauncher.app.BuildConfig.VERSION_NAME} · ${com.searchlauncher.app.BuildConfig.GIT_HASH} · ${com.searchlauncher.app.BuildConfig.BUILD_DATE}",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
       )

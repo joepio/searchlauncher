@@ -17,7 +17,9 @@ import androidx.compose.ui.unit.sp
 
 private sealed class MdBlock {
   data class Heading(val level: Int, val content: String) : MdBlock()
+
   data class Paragraph(val content: String) : MdBlock()
+
   data class BulletItem(val content: String) : MdBlock()
 }
 
@@ -40,26 +42,21 @@ private fun parseMarkdownBlocks(text: String): List<MdBlock> {
         flushParagraph()
         blocks.add(MdBlock.Heading(3, trimmed.removePrefix("###").trim()))
       }
-
       trimmed.startsWith("##") -> {
         flushParagraph()
         blocks.add(MdBlock.Heading(2, trimmed.removePrefix("##").trim()))
       }
-
       trimmed.startsWith("#") -> {
         flushParagraph()
         blocks.add(MdBlock.Heading(1, trimmed.removePrefix("#").trim()))
       }
-
       trimmed.startsWith("- ") -> {
         flushParagraph()
         blocks.add(MdBlock.BulletItem(trimmed.removePrefix("- ").trim()))
       }
-
       trimmed.isEmpty() -> {
         flushParagraph()
       }
-
       else -> {
         if (paragraphBuffer.isNotEmpty()) paragraphBuffer.append(' ')
         paragraphBuffer.append(trimmed)
@@ -77,9 +74,7 @@ private fun parseInlineMarkdown(text: String): AnnotatedString {
       if (i + 1 < text.length && text[i] == '*' && text[i + 1] == '*') {
         val end = text.indexOf("**", i + 2)
         if (end != -1) {
-          withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-            append(text.substring(i + 2, end))
-          }
+          withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(text.substring(i + 2, end)) }
           i = end + 2
           continue
         }
@@ -115,7 +110,6 @@ private fun MarkdownContent(text: String) {
           )
           Spacer(modifier = Modifier.height(2.dp))
         }
-
         is MdBlock.Paragraph -> {
           Text(
             text = parseInlineMarkdown(block.content),
@@ -124,7 +118,6 @@ private fun MarkdownContent(text: String) {
             lineHeight = 20.sp,
           )
         }
-
         is MdBlock.BulletItem -> {
           Row(modifier = Modifier.padding(start = 8.dp)) {
             Text(
@@ -152,11 +145,7 @@ fun PrivacyPolicyDialog(onDismiss: () -> Unit, policyText: String) {
   AlertDialog(
     onDismissRequest = onDismiss,
     title = { Text("Privacy Policy") },
-    text = {
-      Box(modifier = Modifier.heightIn(max = 400.dp)) {
-        MarkdownContent(policyText)
-      }
-    },
+    text = { Box(modifier = Modifier.heightIn(max = 400.dp)) { MarkdownContent(policyText) } },
     confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
   )
 }
@@ -164,7 +153,7 @@ fun PrivacyPolicyDialog(onDismiss: () -> Unit, policyText: String) {
 @Composable
 fun ConsentDialog(onConsentGiven: (Boolean) -> Unit, onViewPrivacyPolicy: () -> Unit) {
   AlertDialog(
-    onDismissRequest = { /* Don't dismiss without choice */ },
+    onDismissRequest = { /* Don't dismiss without choice */},
     title = { Text("Help improvement SearchLauncher?") },
     text = {
       Column {

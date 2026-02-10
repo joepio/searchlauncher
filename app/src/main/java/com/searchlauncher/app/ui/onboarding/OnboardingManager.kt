@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 val Context.onboardingDataStore: DataStore<Preferences> by
-androidx.datastore.preferences.preferencesDataStore(name = "onboarding")
+  androidx.datastore.preferences.preferencesDataStore(name = "onboarding")
 
 class OnboardingManager(private val context: Context) {
 

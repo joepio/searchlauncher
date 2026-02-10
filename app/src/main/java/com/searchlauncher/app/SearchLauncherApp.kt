@@ -106,10 +106,10 @@ class SearchLauncherApp : Application() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       val channel =
         NotificationChannel(
-          NOTIFICATION_CHANNEL_ID,
-          "SearchLauncher Service",
-          NotificationManager.IMPORTANCE_LOW,
-        )
+            NOTIFICATION_CHANNEL_ID,
+            "SearchLauncher Service",
+            NotificationManager.IMPORTANCE_LOW,
+          )
           .apply {
             description = "Keeps SearchLauncher running in the background"
             setShowBadge(false)
